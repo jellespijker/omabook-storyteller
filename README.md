@@ -35,11 +35,11 @@ Nothing else: no network (`http`) and no programs (`run`). The model is reached 
 | Reader | `Ctrl+Shift+B` | **Branch the story from here**: a new book with the chapters up to the one you are in, which then goes another way. |
 | Anywhere | `Ctrl+Shift+E` | **Write a sequel** in the world of a story that has ended. |
 
-The keys can be changed in Omabook's `keys.json` like any other (`?` shows them). The panel beside the page shows how the story stands ("Writing chapter 4…"), has a field to steer and one to ask, the branch and sequel buttons, and a list of what you know of the world so far.
+The keys can be changed in Omabook's `keys.json` like any other (`?` shows them). The panel beside the page shows how the story stands ("Writing chapter 4…"), has a field to steer and one to ask, the branch and sequel buttons, a list of what you know of the world so far, and a button that opens that same knowledge in Omabook's graph view beside the page.
 
 A story is an ordinary book in the library. Contents, search, bookmarks, the reading companion (`A`), catch-up and who-is-who all work on it, because Omabook reads it through the format this plugin registers.
 
-Steering, continuing and branching are for Storyteller's own books only. For any other book the commands say so and do nothing, the functions refuse, and Omabook itself refuses to let a plugin rewrite a book it did not make. A book by a person stays as its author wrote it.
+Steering, continuing and branching are for Storyteller's own books only, and that is guarded three times. The panel and every command but "Write me a story" are registered with `when: "generated"`, so beside a book by a person there is no panel and the keys do nothing. The functions refuse any other book, for whoever calls them another way. And Omabook itself refuses to let a plugin rewrite a book it did not make. A book by a person stays as its author wrote it.
 
 ## How it works
 
@@ -126,7 +126,7 @@ A question to the author is answered from what you have read and nothing more: t
 
 ### Branching
 
-"Branch the story from here" makes a new book: the chapters up to the one you are in, a copy of both graphs with everything later taken back out, the plan revised for the way you said it should differ, and the first chapter of the new road. Its lineage (which story, which chapter, what you asked for) is in its file and its description. The original is untouched, and the two go on independently.
+"Branch the story from here" makes a new book: the chapters up to the one you are in, a copy of both graphs with everything later taken back out, the plan revised for the way you said it should differ, and the first chapter of the new road, which is where the new book opens. Its lineage (which story, which chapter, what you asked for) is in its file and its description. The original is untouched, and the two go on independently.
 
 ### When things go wrong
 
@@ -157,6 +157,8 @@ So a twelve-chapter book at the default 1,200 words a chapter is about 27 reques
 
 A chapter's request does not grow with the book. The model is sent the plan and the world (some 20,000 to 30,000 characters, cut at 36,000 however much the world has grown), one short summary per chapter (older ones shorter), and the last 2,500 characters of the previous chapter: not the book.
 
+Two of these go to Omabook's quick model by default, since they read text into JSON and invent nothing: the second request of every chapter (what the chapter established) and the renames. Everything a reader reads, and everything the story is built on, goes to the main model. The request that reads a chapter is given the twists by label and seed only, never their truths, so it has no secret to write into the reader's graph whichever model answers it. Both are settings, below.
+
 What each story has actually used is in its file, under `cost` (requests, and characters sent and received), and in `omabook plugin run storyteller stories`.
 
 Reading a story also feeds Omabook's own knowledge graph if you have that set to grow as you read, like any book; that is Omabook's setting and its cost, not this plugin's.
@@ -174,6 +176,8 @@ omabook plugin run storyteller settings '[{"chapter_words": 800, "write_ahead": 
 | `chapters` | 12 | How many chapters a new story is planned to take. Steering may change it. |
 | `write_ahead` | true | Write the next chapter by itself as you near the end of what there is. |
 | `write_at` | 0.35 | How far into the last chapter (0 to 1) you must be before the next is started. |
+| `model_writing` | main | The model for what you read and what the story is built on: the world, the cast, the plot, revised plans, the chapters, the author's answers. `main` is the model chosen in Omabook's settings. |
+| `model_structure` | quick | The model for turning text into structure: reading a finished chapter into the two graphs, and renaming taken names. `quick` is Omabook's small, fast model; set it to `main` if yours makes a poor job of it. |
 | `language` | English | The language stories are written in. |
 | `pen_name` | Storyteller | The author on the cover. |
 | `forbidden_names`, `allowed_names` | none | Your own additions to the originality check. |
@@ -203,6 +207,7 @@ lib/writer.js         the writing: a new story, a chapter, a branch, a sequel, a
 lib/reading.js        page turns (when to write, what to reveal), steering, asking the author
 tests/run.py          the tests: the whole life of a story, driven from the command line
 tests/stub_ai.py      a stand-in for the model that answers canned text
+tests/window/         the plugin in Omabook's real window, offscreen (needs Omabook's source)
 data/                 made when the plugin runs: stories/, jobs/, settings.json (not in the repository)
 ```
 
@@ -210,7 +215,7 @@ Each file in `lib/` makes one global (`Util`, `Stories`, `World`, …) because a
 
 ## Trying it from the command line
 
-Every top-level function in `main.js` can be run without the window, which is how to see what each part does. `plugin run` waits for promises, up to ten minutes, so a chapter can be written this way.
+Every top-level function in `main.js` can be run without the window, which is how to see what each part does. `plugin run` waits for the promise a function answers, ten minutes at most unless `--wait <minutes>` says otherwise, so a chapter can be written this way.
 
 ```bash
 omabook plugin check storyteller                                   # loads it; errors come with file and line
@@ -235,14 +240,15 @@ omabook plugin run storyteller abandon '["smb…"]'                  # or give i
 omabook plugin run storyteller event:page.turned \
     '{"id": 41, "generated": "storyteller", "identifiers": {"storyteller": "smb…"}, "section": 0, "sections": 1, "fraction": 0.5}'
 omabook plugin run storyteller command:story-branch '{"book": 12}' # a command; on someone else's book it refuses
+omabook plugin run storyteller showWorld '[41]'                    # in the window: the reader's graph in Omabook's graph view
 
 omabook toc 41 ; omabook text 41 --section 0                       # the book, as any book
 omabook graph show --scope world:smb…                              # the reader's graph, as any graph
 ```
 
-`plugin run` gives up after ten minutes. A new story is five requests and can take longer than that with a slow model; nothing is lost, and `omabook plugin run storyteller resume` carries on from the request that was cut off.
+A new story is five requests and can take longer than ten minutes with a slow model: give it room with `--wait 30`. If a run is cut off all the same, nothing is lost, and `omabook plugin run storyteller resume` carries on from the request that was cut off.
 
-`plugin run` reads a plugin's book format only from the default plugin folder (`~/.config/omabook/plugins`), so a `.story` book can't be made with `--folder` pointing somewhere else. To try the plugin without touching your own setup, point `XDG_CONFIG_HOME` at a scratch folder, put the plugin in `omabook/plugins/` under it, and pass `--library` a scratch library; `tests/run.py` does exactly that.
+To try the plugin without installing it, point `--folder` at the folder that holds it and `--library` at a scratch library: `omabook plugin run storyteller startStory '["…"]' --folder ~/src --library /tmp/books`. The story is made and its format is known for that run. Reading the book afterwards (`omabook toc`, the window) needs the plugin installed, since that is where Omabook looks for formats; `tests/run.py` therefore installs it into a scratch config folder.
 
 ## Tests
 
@@ -253,27 +259,25 @@ python3 tests/run.py --keep     # leave the scratch folder to look at
 
 The tests need no window and no model. They make a scratch home, a scratch library with one ordinary book and a little graph, copy the plugin into a scratch plugin folder, set Omabook's AI to the command `tests/stub_ai.py`, and then drive `omabook plugin run` through the whole life of a story: a world built in its own scope, a collision with a library name rejected and renamed, chapter one, page turns that do and do not write chapter two, steering, asking the author with and without spoilers, a chapter interrupted and picked up, the end, a sequel, a branch with copied graphs and lineage, the refusals for a book by a person, answers that are no good, and a lost working copy restored.
 
-The panel is not covered by them: it needs a window.
+The window has a test of its own, `tests/window/`: a small program that links Omabook's code and loads its real `Main.qml` offscreen, with the plugin in a scratch plugin folder and the same stand-in model. It starts a story from its key, types in the panel's steer field (and checks the letters did not set off the reader's single-key shortcuts), pages on until the next chapter arrives and the reader has kept its place, opens the graph view, asks the author, branches (the branch opens at its first new chapter), opens a book by a person (no panel, no story commands), and requires that QML warned of nothing. It needs Omabook's source tree and a build of it; `tests/window/CMakeLists.txt` says how.
 
 ## Writing your own plugin, starting from this one
 
 1. **Start small.** `omabook plugin new mine --template format` (or `command`, `hook`, `panel`, `metadata`, `catalog`) makes a plugin of twenty lines that does one thing. This plugin is those templates grown up: its format is `Stories.register` in `lib/storyfile.js`, its commands and hooks are in `main.js`, its panel is `Panel.qml` fed by `lib/status.js`.
 2. **Read the reference once.** `omabook plugin api` prints the whole `omabook` object, the events and the permissions. It is generated from Omabook's code, so it is never out of date.
 3. **Keep the loop tight.** Edit, `omabook plugin check mine`, `omabook plugin run mine someFunction '[arguments]'`. Make the things you want to try top-level functions; that is the only reason half the functions in `main.js` exist.
-4. **Know the language.** JavaScript on Qt's engine: no `async`/`await` (chain `.then`), no modules (`omabook.include`), no `setTimeout` (`omabook.after`), no `fetch` (`omabook.http`). Also missing, as this plugin found: object rest (`{a, ...rest}`), `Array.prototype.flat`, `String.prototype.replaceAll`, `\p{…}` in regular expressions, and lookbehind that works.
+4. **Know the language.** JavaScript on Qt's engine: no `async`/`await` (chain `.then`), no modules (`omabook.include`), no `setTimeout` (`omabook.after`), no `fetch` (`omabook.http`), no object rest or spread. In regular expressions `\p{…}` and lookbehind parse and then never match, silently. `omabook plugin api` lists exactly what is missing and what Omabook adds back (`flat`, `at`, `replaceAll`, `Promise.prototype.finally` and more).
 5. **Five seconds.** Every call into the script has to come back within five seconds of its own running time. Waiting for a promise doesn't count, so do slow work in `.then` steps, one piece each (see `stage` in `lib/writer.js`).
 6. **Keep state on disk.** The script can be loaded again at any time (you saved a file, Omabook restarted, the command line loaded a second copy to read your format). `omabook.settings` and files under `data/` survive; variables do not. Running the top level of your script should change nothing.
 7. **Ask for little.** A permission is shown to whoever installs the plugin. This one needs `files` and nothing else.
-8. **Things worth copying from here:** checking every AI answer before using it (`lib/ai.js`); a stand-in model for tests (`tests/stub_ai.py`); the panel finding its own plugin's values without knowing the folder's name (`Panel.qml`); refusing in one place to touch books that are not yours (`own` in `main.js`).
+8. **Things worth copying from here:** checking every AI answer before using it (`lib/ai.js`); a stand-in model for tests (`tests/stub_ai.py`); a panel that asks the script for something with `backend.scripts.request` and hears what came of it through `answered` (`Panel.qml`); the panel finding its own plugin's values without knowing the folder's name (`Panel.qml`); `when: "generated"` plus a refusal in one place for books that are not yours (`own` in `main.js`); a run of the real window with no display (`tests/window/`).
 
 ## Limits
 
 - The panel's text is English only; a plugin has no translation catalog. Stories themselves are written in whatever `language` says.
-- The panel sits beside every book, not only Storyteller's (a plugin can't show a panel for some books and not others). Beside other books it shows one line.
-- Omabook's graph view can't be opened on a scope from a plugin, so "what you know so far" is a list in the panel, and the whole graph is a command away: `omabook graph show --scope world:<id>`.
-- A branch opens at its first page; find the chapter where it parts ways in the contents (`T`). A plugin can't open a book at a place.
-- The commands are listed among the reader's keys for every book, since a command can't be offered for some books only. On any other book they say why not.
+- The plan of a story is in its `.story` file as plain JSON. Omabook never shows it, but an editor would.
 - The originality check catches names, not ideas. See above.
+- A chapter being written can't be stopped; a wish that arrives meanwhile shapes the one after.
 
 ## License
 
