@@ -6,7 +6,10 @@
 
 Everything happens in a scratch folder: HOME and the XDG folders point into
 it, so no real settings, plugins or library are read or written. The plugin
-is copied into the scratch plugin folder, a library is made with one
+is copied into the scratch config's plugin folder, where an installed plugin
+lives, so that `omabook toc` and `omabook text` read its books too (`omabook
+plugin run --folder <anywhere>` needs no such thing; the last step shows it).
+A library is made with one
 ordinary book in it and a little knowledge graph, and Omabook's AI is set to
 the command tests/stub_ai.py, which answers each kind of request with canned
 text and can be told to misbehave.
@@ -360,6 +363,8 @@ def main():
         listed = {entry["id"]: entry for entry in bench.json("list")}
         assert listed[fork_book]["identifiers"]["storyteller"] == fork_id and listed[fork_book]["title"] == fork["title"]
         assert "A branch of" in bench.json("show", fork_book)["description"]
+        assert bench.json("progress", fork_book)["section"] == 2, "a branch opens at the first chapter that is its own"
+        assert bench.json("progress", sequel_book)["section"] == 0
         step("a branch is a new book: the chapters up to there, both graphs copied and cut back, its lineage kept")
 
         # ------------------------------------------------ not for other books
@@ -430,6 +435,15 @@ def main():
         general = bench.json("graph", "show")
         assert not [node for node in general["nodes"] if node["name"] in ("Ilse Marrow", "Teodor Vash", "Brinehollow")]
         step("the general graph holds nothing of the made-up worlds")
+
+        # The plugin kept somewhere else than the plugin folder, as while
+        # it is being written: its format still reads its books.
+        elsewhere = os.path.join(bench.scratch, "elsewhere")
+        shutil.copytree(bench.plugin, os.path.join(elsewhere, NAME))
+        bench.control()
+        made = bench.omabook("plugin", "run", NAME, "startStory", '["from another folder"]', "--folder", elsewhere, "--json", "--wait", 2)
+        assert json.loads(made.stdout)["result"]["chapters"] == 1, made.stdout
+        step("the plugin runs from any folder with --folder, its book format included")
 
         print("\nAll %d steps passed." % len(passed))
         if "--keep" in sys.argv:
