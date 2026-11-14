@@ -199,9 +199,13 @@ def main():
             if call["task"] != "rename":
                 for name in ("Vesper Quill", "Harrowgate", "Brass Orchard", "Tolland"):
                     assert name not in call["prompt"], (call["task"], name)
+        tiers = {call["task"]: call["tier"] for call in bench.calls()}
+        assert tiers == {"world": "main", "cast": "main", "plot": "main", "chapter": "main", "update": "quick", "rename": "quick"}, tiers
+        update_prompt = [call["prompt"] for call in bench.calls() if call["task"] == "update"][0]
+        assert "TWISTSECRET" not in update_prompt and "The judge opened the sluices" in update_prompt, "the quick model is shown a twist's label, not its truth"
         world_prompt = bench.calls()[0]["prompt"]
         assert "a quiet mystery by the sea" in world_prompt and "debts between friends" in world_prompt
-        step("every request states the originality rule, and none carries a name from the library")
+        step("every request states the originality rule and none carries a library name; structure goes to the quick model, without secrets")
 
         story = bench.story(story_id)
         seen, plan = story["world"]["seen"], story["world"]["plan"]

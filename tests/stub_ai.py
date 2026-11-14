@@ -8,7 +8,8 @@ prompts starts with and answers with canned JSON or prose, so the whole
 life of a story can be run without a model, in seconds and for nothing.
 
 The folder named by STUB_DIR holds:
-  calls.jsonl    every request, one JSON object a line: {"task", "prompt"}
+  calls.jsonl    every request, one JSON object a line: {"task", "prompt",
+                 "tier" ("main" or "quick": the model Omabook was asked for)}
   control.json   how to misbehave, written by the test (all optional):
       {"collide_world": true}    the world uses a name from the library
       {"collide_chapter": true}  the chapter does
@@ -196,7 +197,8 @@ def main():
     task = found.group(1) if found else "none"
     control, state = read("control.json", {}), read("state.json", {})
     with open(os.path.join(FOLDER, "calls.jsonl"), "a", encoding="utf-8") as log:
-        log.write(json.dumps({"task": task, "prompt": prompt}) + "\n")
+        # Omabook tells a command which of its two models was asked for.
+        log.write(json.dumps({"task": task, "prompt": prompt, "tier": os.environ.get("OMABOOK_AI_TIER", "")}) + "\n")
 
     seen = state.get(task, 0)
     state[task] = seen + 1
