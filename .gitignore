@@ -1,0 +1,7 @@
+# What the plugin keeps while it runs: stories, jobs, settings.
+data/
+# Scratch of the tests and of trying things out.
+.scratch/
+__pycache__/
+*.pyc
+*.error
