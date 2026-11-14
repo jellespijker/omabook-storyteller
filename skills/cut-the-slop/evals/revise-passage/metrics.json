@@ -1,6 +1,6 @@
 [
  {
   "metric": "stock_phrases",
-  "compare": "lower"
+  "max": 0
  }
 ]
