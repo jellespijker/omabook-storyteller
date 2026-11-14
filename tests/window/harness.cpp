@@ -229,6 +229,11 @@ private slots:
         desk.shot("02-mood");
         desk.type("a quiet mystery");
         desk.key(Qt::Key_Return);
+        // Then which skills: a second question in the same dialog.
+        QTRY_COMPARE(desk.value("pluginAskTitle", "text").toString(), QString("Any skills to write it with?"));
+        desk.type("spare, chapter hooks");
+        desk.shot("02b-skills");
+        desk.key(Qt::Key_Return);
         QTRY_VERIFY(!desk.value("pluginAsk", "visible").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(desk.stories().size() == 1, 30000);
         QTRY_VERIFY_WITH_TIMEOUT(desk.reader->isOpen(), 10000);
@@ -307,6 +312,18 @@ private slots:
         desk.key(Qt::Key_Return);
         QTRY_VERIFY_WITH_TIMEOUT(desk.value("storytellerAnswer", "text").toString().contains("NO-PLAN"), 15000);
         desk.shot("09-answer");
+
+        // --- The story's skills in the panel: one taken out by its button,
+        //     another added from the list.
+        QTRY_COMPARE(desk.view().value("skills").toArray().size(), 2);
+        QVERIFY(desk.click("storytellerSkill_chapter-hooks"));
+        QTRY_COMPARE(desk.view().value("skills").toArray().size(), 1);
+        QVERIFY(desk.click("storytellerSkillAdd"));
+        QTRY_COMPARE(desk.view().value("skills").toArray().size(), 2);
+        QVERIFY(desk.find("storytellerSkill_spare-concrete"));
+        QVERIFY(desk.click("storytellerSkillOwn"));
+        QTRY_VERIFY(desk.find("storytellerSkillText") && desk.find("storytellerSkillText")->isVisible());
+        desk.shot("09a-skills");
 
         // --- A request that can't be granted comes back as an error, which the panel shows.
         {
