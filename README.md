@@ -145,7 +145,7 @@ Every request goes to the AI you set up in Omabook, on your subscription or key.
 | A chapter after you steered: the plan revised first | +1 | 9,000 tokens | 3,000 tokens |
 | A question to the author | 1 | 2,000 to 5,000 tokens (12,000 with spoilers) | 200 tokens |
 | A branch: the plan revised, then a chapter | 3 | 27,000 tokens | 8,000 tokens |
-| A sequel: its plan, then a chapter | 3 | 22,000 tokens | 7,000 tokens |
+| A sequel: its plan, then a chapter | 3 | 19,000 tokens | 5,500 tokens |
 | A draft that used a taken name | +1 or +2 | 400 tokens each | 100 tokens each |
 | An answer that could not be used | +1 | the same request again | |
 
