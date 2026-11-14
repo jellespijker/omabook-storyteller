@@ -82,6 +82,10 @@ The general graph is read, never written: it is where the taste profile and the 
 
 Before a world is built, `lib/taste.js` reads what you have read and how you rated it, and writes a few lines of abstractions: the kinds of book you rate highly and the kinds you don't, the themes that run through them, real-world subjects you like meeting, the kinds of invented system you enjoyed (described, never named), the kinds of thing you ask about. Every name the library knows is taken out before the model sees it. `omabook plugin run storyteller taste` prints exactly what would be sent.
 
+Two caveats, said plainly. The inventions you enjoyed are described to the model in a sentence each ("an economy where air is the currency") with the instruction to reuse none of them nor any near variant; that is a description of someone's idea, and it is there because "you like systems with a price" cannot be said without an example. And a topic is only told from a name by its capitals, so a real person's single name could pass as a subject.
+
+The model is also told, in a line each, what it has already written for you (title, premise, the main people's names), so that a second story is not the first one again. Those are this plugin's own inventions.
+
 ### The originality rule
 
 A story may not reuse the characters, places, named things, plots or distinctive inventions of existing books and authors, nor imitate a named author's voice. It is enforced twice.
@@ -136,18 +140,20 @@ Every request goes to the AI you set up in Omabook, on your subscription or key.
 
 | What | Requests | Roughly sent | Roughly received |
 |---|---|---|---|
-| A new story (world, cast, plot) | 3 | 1,500 + 2,500 + 4,500 tokens | 1,500 + 2,000 + 2,500 tokens |
-| Each chapter (the chapter, then what it established) | 2 | 5,000 to 8,000 + 4,500 to 6,500 tokens | 1.4 × the chapter's words + 700 tokens |
-| A chapter after you steered (the plan revised first) | +1 | 5,500 tokens | 1,200 tokens |
-| A question to the author | 1 | 1,500 to 4,000 tokens (6,000 with spoilers) | 200 tokens |
-| A branch | 3 | as a steered chapter | |
-| A sequel | 3 | 6,000 tokens for its plan, then a chapter | 2,500 tokens, then a chapter |
+| A new story: world, cast, plot | 3 | 600 + 3,000 + 6,000 tokens | 2,500 + 3,500 + 3,500 tokens |
+| Each chapter: the chapter, then what it established | 2 | 7,000 + 4,500 tokens | 1.4 tokens a word of chapter + 2,000 |
+| A chapter after you steered: the plan revised first | +1 | 9,000 tokens | 3,000 tokens |
+| A question to the author | 1 | 2,000 to 5,000 tokens (12,000 with spoilers) | 200 tokens |
+| A branch: the plan revised, then a chapter | 3 | 27,000 tokens | 8,000 tokens |
+| A sequel: its plan, then a chapter | 3 | 22,000 tokens | 7,000 tokens |
 | A draft that used a taken name | +1 or +2 | 400 tokens each | 100 tokens each |
 | An answer that could not be used | +1 | the same request again | |
 
-So a twelve-chapter book at the default 1,200 words a chapter is about 27 requests and some 190,000 tokens in all, most of it sent. The numbers are for chapters of 1,200 words; they were measured in the trials described in this repository's history and scale with `chapter_words`.
+These are measured, not guessed: three stories were started and read into with Claude Code as the model, at 450 to 600 words a chapter, and the figures are what their files recorded (characters, divided by four). A new story with its first chapter came to 5 requests, about 18,000 tokens sent and 11,000 to 15,000 received, in five to seven minutes; each further chapter to 2 requests, 11,000 to 15,000 tokens sent and about 3,500 received, in a minute and a half.
 
-A chapter's request does not grow with the book. The model is sent the plan and the world (cut at 24,000 characters), one short summary per chapter (older ones shorter), and the last 2,500 characters of the previous chapter: not the book.
+So a twelve-chapter book at the default 1,200 words a chapter is about 27 requests, some 200,000 tokens sent and 70,000 received. Most of what is sent is the same world and plan each time, which a provider that caches prompts charges little for; a model run through a command or a subscription may count it in full.
+
+A chapter's request does not grow with the book. The model is sent the plan and the world (some 20,000 to 30,000 characters, cut at 36,000 however much the world has grown), one short summary per chapter (older ones shorter), and the last 2,500 characters of the previous chapter: not the book.
 
 What each story has actually used is in its file, under `cost` (requests, and characters sent and received), and in `omabook plugin run storyteller stories`.
 
@@ -231,6 +237,8 @@ omabook plugin run storyteller command:story-branch '{"book": 12}' # a command; 
 omabook toc 41 ; omabook text 41 --section 0                       # the book, as any book
 omabook graph show --scope world:smb…                              # the reader's graph, as any graph
 ```
+
+`plugin run` gives up after ten minutes. A new story is five requests and can take longer than that with a slow model; nothing is lost, and `omabook plugin run storyteller resume` carries on from the request that was cut off.
 
 `plugin run` reads a plugin's book format only from the default plugin folder (`~/.config/omabook/plugins`), so a `.story` book can't be made with `--folder` pointing somewhere else. To try the plugin without touching your own setup, point `XDG_CONFIG_HOME` at a scratch folder, put the plugin in `omabook/plugins/` under it, and pass `--library` a scratch library; `tests/run.py` does exactly that.
 

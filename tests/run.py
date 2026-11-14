@@ -415,6 +415,13 @@ def main():
         assert os.path.exists(master) and bench.story(fork_id)["title"] == fork["title"]
         step("a story whose working copy is lost gets it back from the library's copy")
 
+        bench.control()
+        bench.ok("startStory", "")
+        again = bench.calls()[0]["prompt"]
+        assert "surprise me" in again and "You have written for this reader before" in again, again[:400]
+        assert "\"The Glass Tithe\"" in again and "Ilse Marrow" in again and "The Glass Debt" not in again
+        step("a second story is told what the first was, so as not to be it again")
+
         overview = {entry["story"]: entry for entry in bench.ok("stories")}
         assert overview[story_id]["chapters"] == 4 and overview[story_id]["ended"] and overview[fork_id]["lineage"]["kind"] == "fork"
         view = bench.ok("world", book)
