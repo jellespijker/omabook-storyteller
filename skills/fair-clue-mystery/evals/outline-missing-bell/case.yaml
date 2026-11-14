@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: outline-missing-bell
+expected_outcome: |
+  A fair puzzle: every clue shown before the reveal, red herrings true, no cheats.

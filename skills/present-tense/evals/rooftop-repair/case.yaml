@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: rooftop-repair
+expected_outcome: |
+  Close third person in the present tense with no slips into the past tense.

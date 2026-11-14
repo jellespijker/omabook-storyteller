@@ -1,0 +1,6 @@
+[
+ {
+  "metric": "mean_sentence_words",
+  "compare": "higher"
+ }
+]

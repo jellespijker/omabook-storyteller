@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: borrowing-money
+expected_outcome: |
+  People talk around what matters, in distinct voices, with plain tags.

@@ -1,0 +1,10 @@
+[
+ {
+  "metric": "mean_sentence_words",
+  "compare": "lower"
+ },
+ {
+  "metric": "filler_per_1000",
+  "compare": "not_higher"
+ }
+]

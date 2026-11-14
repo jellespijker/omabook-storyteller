@@ -306,6 +306,30 @@ function removeSkill(id) { return Skills.remove(id); }
 // Switches a skill off (it is offered to no story and shapes none), or on.
 function switchSkill(id, on) { return Skills.switchOn(id, on !== false); }
 
+// For the skills' evals (tests/evals.py --quality): a brief written with a
+// skill, or with none (`id` empty), and a result graded against statements.
+// Each is one request to the AI set up in Omabook.
+function evalDraft(id, brief) {
+    const chosen = id ? [Skills.find(id, true)].filter(Boolean) : [];
+    if (id && chosen.length === 0)
+        throw new Error("There is no skill called \"" + id + "\".");
+    const before = Ai.tally();
+    return Ai.prose("eval", Prompts.evalTask(Util.text(brief), chosen.map(Skills.snapshot))).then(function (text) {
+        return {text: text, cost: Ai.since(before)};
+    });
+}
+
+function evalGrade(text, statements) {
+    return Ai.json("grade", Prompts.grade(text, Util.list(statements)), function (answer) {
+        const grades = Util.list(answer.grades);
+        if (grades.length !== Util.list(statements).length)
+            throw new Error("it grades " + grades.length + " statements, and there are " + Util.list(statements).length);
+        return grades.map(function (grade, index) {
+            return {text: Util.list(statements)[index], passed: grade.passed === true, evidence: Util.clip(grade.evidence, 400)};
+        });
+    });
+}
+
 // A story's skills, and when they were chosen or changed.
 function storySkills(bookId) {
     const mine = own(bookId, "looked into");
