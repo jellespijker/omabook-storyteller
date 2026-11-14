@@ -159,16 +159,17 @@ def main():
                 ("theme", "debts between friends", "", []),
                 ("topic", "tidal mechanics", "", []),
                 ("topic", "The Odyssey", "", []),
-                ("concept", "Tidewrighting", "A magic paid for in memories, as Vesper Quill learns in Harrowgate.", [])):
+                ("concept", "Tidewrighting", "A magic paid for in memories, as Vesper Quill learns in Harrowgate.", []),
+                ("concept", "Salt reckoning", "An economy where breath is money.", [])):
             bench.omabook("graph", "add", "--kind", kind, "--name", name, "--summary", summary, "--book", human, "--section", 0, *more)
         bench.omabook("graph", "sync")
         bench.ok("settings", {"chapter_words": 200, "chapters": 4, "stale_seconds": 1})
 
         taste = bench.ok("taste")
         assert "debts between friends" in taste and "tidal mechanics" in taste, taste
-        for name in ("Vesper", "Quill", "Harrowgate", "Brass Orchard", "Tolland", "Tidewrighting", "Odyssey"):
+        for name in ("Vesper", "Quill", "Harrowgate", "Brass Orchard", "Tolland", "Tidewrighting", "Odyssey", "breath is money", "memories"):
             assert name not in taste, (name, taste)
-        step("the taste profile holds themes and kinds of thing, and no name from the library")
+        step("the taste profile holds themes and kinds of thing: no name from the library, and no invention of its books")
 
         forbidden = [entry["name"] for entry in bench.ok("forbiddenNames")]
         for name in ("Vesper Quill", "Quillmaster", "Harrowgate", "Brass Orchard", "Mira Tolland", "Tolland", "Gandalf"):

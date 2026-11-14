@@ -80,9 +80,11 @@ The general graph is read, never written: it is where the taste profile and the 
 
 ### Taste, not content
 
-Before a world is built, `lib/taste.js` reads what you have read and how you rated it, and writes a few lines of abstractions: the kinds of book you rate highly and the kinds you don't, the themes that run through them, real-world subjects you like meeting, the kinds of invented system you enjoyed (described, never named), the kinds of thing you ask about. Every name the library knows is taken out before the model sees it. `omabook plugin run storyteller taste` prints exactly what would be sent.
+Before a world is built, `lib/taste.js` reads what you have read and how you rated it, and writes a few lines of abstractions: the kinds of book you rate highly and the kinds you don't, the themes that run through them, real-world subjects you like meeting, the kinds of thing you ask about. Every name the library knows is taken out before the model sees it. `omabook plugin run storyteller taste` prints exactly what would be sent.
 
-Two caveats, said plainly. The inventions you enjoyed are described to the model in a sentence each ("an economy where air is the currency") with the instruction to reuse none of them nor any near variant; that is a description of someone's idea, and it is there because "you like systems with a price" cannot be said without an example. And a topic is only told from a name by its capitals, so a real person's single name could pass as a subject.
+What is left out on purpose: the inventions of the books you liked. The graph knows each book's magic systems, technologies and rules of the world, and a line such as "an economy where air is the currency" would say a great deal about your taste. It is also a description of another author's idea, and the originality rule comes first, so nothing of a concept is passed on, not even reworded. Taste stays at the level of category words: genres, themes, subjects.
+
+One caveat. A topic is only told from a name by its capitals, so a real person's single name could pass as a subject.
 
 The model is also told, in a line each, what it has already written for you (title, premise, the main people's names), so that a second story is not the first one again. Those are this plugin's own inventions.
 
