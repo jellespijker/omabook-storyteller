@@ -269,6 +269,9 @@ Flickable {
                     model: view.skillChoices || []
                     textRole: "name"
                     Accessible.name: "A skill to add"
+                    // A new list (after every change) would otherwise leave
+                    // nothing chosen, and Add with nothing to add.
+                    onCountChanged: if (count > 0 && (currentIndex < 0 || currentIndex >= count)) currentIndex = 0
                     contentItem: Label {
                         leftPadding: 8
                         text: skillPick.displayText

@@ -182,6 +182,19 @@ struct Desk {
         QQuickItem *item = find(name);
         if (!item || !item->isVisible())
             return false;
+        // An item below the fold of a scrolling panel is scrolled to first,
+        // as a person would.
+        for (QQuickItem *parent = item->parentItem(); parent; parent = parent->parentItem()) {
+            if (!parent->property("contentY").isValid() || !parent->property("contentHeight").isValid())
+                continue;
+            const QPointF at = item->mapToItem(parent, QPointF(0, 0));
+            if (at.y() < 0 || at.y() + item->height() > parent->height()) {
+                const qreal most = qMax<qreal>(0, parent->property("contentHeight").toReal() - parent->height());
+                parent->setProperty("contentY", qBound<qreal>(0, parent->property("contentY").toReal() + at.y() - parent->height() / 3, most));
+                QTest::qWait(100);
+            }
+            break;
+        }
         const QPointF centre = item->mapToScene(QPointF(item->width() / 2, item->height() / 2));
         QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, centre.toPoint());
         return true;
@@ -318,9 +331,20 @@ private slots:
         QTRY_COMPARE(desk.view().value("skills").toArray().size(), 2);
         QVERIFY(desk.click("storytellerSkill_chapter-hooks"));
         QTRY_COMPARE(desk.view().value("skills").toArray().size(), 1);
-        QVERIFY(desk.click("storytellerSkillAdd"));
-        QTRY_COMPARE(desk.view().value("skills").toArray().size(), 2);
-        QVERIFY(desk.find("storytellerSkill_spare-concrete"));
+        {
+            // Wry, which goes with what the story has (spare and lush exclude
+            // each other, so adding one would only swap them).
+            const QJsonArray choices = desk.view().value("skillChoices").toArray();
+            int wry = -1;
+            for (int index = 0; index < choices.size(); ++index)
+                if (choices.at(index).toObject().value("id").toString() == "wry")
+                    wry = index;
+            QVERIFY(wry >= 0);
+            QVERIFY(desk.find("storytellerSkillPick")->setProperty("currentIndex", wry));
+            QVERIFY(desk.click("storytellerSkillAdd"));
+            QTRY_COMPARE(desk.view().value("skills").toArray().size(), 2);
+            QTRY_VERIFY(desk.find("storytellerSkill_wry"));
+        }
         QVERIFY(desk.click("storytellerSkillOwn"));
         QTRY_VERIFY(desk.find("storytellerSkillText") && desk.find("storytellerSkillText")->isVisible());
         desk.shot("09a-skills");

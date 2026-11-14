@@ -10,7 +10,7 @@
 #       /tmp/storyteller-window/window_harness
 cmake_minimum_required(VERSION 3.21)
 project(storyteller_window LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(OMABOOK_SOURCE "" CACHE PATH "Omabook's source tree")
