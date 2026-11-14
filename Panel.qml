@@ -57,7 +57,9 @@ Flickable {
         function onAnswered(id, result, error) {
             if (id !== panel.asked) return
             panel.asked = -1
-            panel.problem = error || ""
+            // The host says where in the script an error was thrown
+            // ("lib/reading.js:80: Error: ..."); a reader wants the rest.
+            panel.problem = (error || "").replace(/^.*?Error: /, "")
         }
     }
 
@@ -82,18 +84,33 @@ Flickable {
         lineHeight: 1.25
     }
 
+    // A one-line field. The hint is drawn here and not handed to the field
+    // as its placeholder: Omabook's style (Material) floats a placeholder
+    // up above the field once something is typed, where it would sit on
+    // top of the heading.
     component Field: TextField {
+        id: field
+        property string hint: ""
         width: column.width
         color: panel.ink
-        placeholderTextColor: panel.faint
         selectByMouse: true
         leftPadding: 8
         rightPadding: 8
         background: Rectangle {
             color: "transparent"
-            border.color: parent.activeFocus ? theme.accent : panel.line
+            border.color: field.activeFocus ? theme.accent : panel.line
             border.width: 1
             radius: theme.radius
+        }
+        Label {
+            anchors.fill: parent
+            anchors.leftMargin: field.leftPadding
+            anchors.rightMargin: field.rightPadding
+            verticalAlignment: Text.AlignVCenter
+            visible: field.text === "" && field.preeditText === ""
+            text: field.hint
+            color: panel.faint
+            elide: Text.ElideRight
         }
         // Escape gives the keyboard back to the page.
         Keys.onEscapePressed: focus = false
@@ -189,7 +206,7 @@ Flickable {
                 id: steerField
                 objectName: "storytellerSteer"
                 enabled: !view.ended
-                placeholderText: view.ended ? "The story has ended" : "Who to follow, what should happen…"
+                hint: view.ended ? "The story has ended" : "Who to follow, what should happen…"
                 onAccepted: {
                     if (text.trim() === "") return
                     panel.tell("steer", text)
@@ -210,7 +227,7 @@ Flickable {
             Field {
                 id: askField
                 objectName: "storytellerAsk"
-                placeholderText: "A question about the story so far"
+                hint: "A question about the story so far"
                 onAccepted: {
                     if (text.trim() === "") return
                     panel.tell(spoilers.checked ? "askSpoilers" : "ask", text)
