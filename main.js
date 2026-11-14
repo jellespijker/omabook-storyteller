@@ -46,14 +46,17 @@ Stories.register();
 
 // The panel beside the page. Its text is plain English: a plugin has no
 // translation catalog, so nothing here follows Omabook's language.
-omabook.ui.panel({place: "reader.side", title: "Storyteller", width: 300, source: "Panel.qml"});
+// `when: "generated"` shows it only beside books this plugin made: next to
+// anybody else's book it takes no room at all.
+omabook.ui.panel({place: "reader.side", title: "Storyteller", width: 300, source: "Panel.qml", when: "generated"});
 
-// A command's `run` is given {book, place}. What it answers (a promise is
+// A command's `run` is given {book, place}. `when` is "always", or
+// "generated" for a command that only makes sense on this plugin's books. What it answers (a promise is
 // fine) is waited for; what goes wrong is told to the reader in a line,
 // since a wish that can't be granted is not a fault in the script.
-function command(id, title, place, key, run) {
+function command(id, title, place, key, when, run) {
     omabook.commands.register({
-        id: id, title: title, place: place, key: key,
+        id: id, title: title, place: place, key: key, when: when,
         run: function (context) {
             try {
                 return Promise.resolve(run(context)).then(null, tell);
@@ -76,7 +79,7 @@ function askReader(title, placeholder) {
     return omabook.ui.ask({title: title, placeholder: placeholder || ""});
 }
 
-command("story-write", "Write me a story", "library", "Ctrl+Shift+W", function () {
+command("story-write", "Write me a story", "library", "Ctrl+Shift+W", "always", function () {
     // A story that was being started when Omabook closed, or that stopped
     // on a problem, is picked up before a new one is begun.
     const unfinished = unfinishedStories()[0];
@@ -88,33 +91,34 @@ command("story-write", "Write me a story", "library", "Ctrl+Shift+W", function (
         .then(function (wish) { return wish === null ? null : startStory(wish); });
 });
 
-command("story-next", "Storyteller: write the next chapter now", "reader", "Ctrl+Shift+N", function (context) {
+command("story-next", "Storyteller: write the next chapter now", "reader", "Ctrl+Shift+N", "generated", function (context) {
     return nextChapter(context.book);
 });
 
-command("story-steer", "Storyteller: steer the story", "reader", "Ctrl+Shift+S", function (context) {
+command("story-steer", "Storyteller: steer the story", "reader", "Ctrl+Shift+S", "generated", function (context) {
     own(context.book, "steered");
     return askReader("Where should the story go?", "Who to follow, what should happen, the tone, the pace…")
         .then(function (wish) { return wish ? steer(context.book, wish) : null; });
 });
 
-command("story-ask", "Storyteller: ask the author", "reader", "Ctrl+Shift+A", function (context) {
+command("story-ask", "Storyteller: ask the author", "reader", "Ctrl+Shift+A", "generated", function (context) {
     own(context.book, "asked about this way");
     return askReader("Ask the author", "No spoilers, unless you ask for them in so many words.")
         .then(function (question) { return question ? askAuthor(context.book, question) : null; });
 });
 
-// Branching is for this plugin's stories only. The command has to be
-// registered for the whole reader (a command can't be offered for some
-// books and not others), so it refuses, in words, any other book; and
-// `branch` below refuses again for whoever calls it another way.
-command("story-branch", "Storyteller: branch the story from here", "reader", "Ctrl+Shift+B", function (context) {
+// Branching is for this plugin's stories only, and it is guarded twice.
+// `when: "generated"` means Omabook offers the command (and its key) only
+// while the book in hand is one this plugin made. And `branch` below
+// refuses any other book for whoever calls it another way: the command
+// line, another plugin, a future mistake here.
+command("story-branch", "Storyteller: branch the story from here", "reader", "Ctrl+Shift+B", "generated", function (context) {
     own(context.book, "branched");
     return askReader("How should it go differently from here?", "What changes from this chapter on.")
         .then(function (difference) { return difference === null ? null : branch(context.book, difference); });
 });
 
-command("story-sequel", "Storyteller: write a sequel in this world", "global", "Ctrl+Shift+E", function (context) {
+command("story-sequel", "Storyteller: write a sequel in this world", "global", "Ctrl+Shift+E", "generated", function (context) {
     own(context.book, "followed by a sequel");
     return askReader("What should the sequel be about?", "Leave empty to let the world decide.")
         .then(function (wish) { return wish === null ? null : sequel(context.book, wish); });
@@ -122,8 +126,11 @@ command("story-sequel", "Storyteller: write a sequel in this world", "global", "
 
 // 3. What the reader does. The three reader events carry the same thing:
 //    {id, generated, identifiers, section, sections, fraction, percent}.
-omabook.on("book.opened", function (event) { return Reading.attend(event); });
-omabook.on("page.turned", function (event) { return Reading.attend(event); });
+//    A handler that starts a chapter hands its promise to omabook.wait, so
+//    that `omabook plugin run storyteller event:page.turned ...` stays
+//    until the chapter is written; in the window it changes nothing.
+omabook.on("book.opened", function (event) { return omabook.wait(Reading.attend(event)); });
+omabook.on("page.turned", function (event) { return omabook.wait(Reading.attend(event)); });
 omabook.on("book.closed", function () { Status.reading(null); });
 omabook.on("app.started", function () {
     Status.refresh();
@@ -167,8 +174,15 @@ function unfinishedStories() {
     });
 }
 
-function opened(made) {
-    omabook.reader.open(made.book);
+// Opens what was just made, at the place the reader should be: the first
+// page of a new story or a sequel, and for a branch the first chapter that
+// is new, since they have read the ones before it in the book they
+// branched from. The place is also kept as the book's progress, so the
+// shelf shows it and the next opening finds it.
+function opened(made, section) {
+    const place = {section: section || 0, fraction: 0};
+    omabook.library.setProgress(made.book, place);
+    omabook.reader.open(made.book, place);
     Status.refresh();
     return made;
 }
@@ -177,7 +191,7 @@ function opened(made) {
 // book and opens it. `wish` is what the reader is in the mood for; empty
 // is "surprise me". A promise of {book, story, title, chapter, ...}.
 function startStory(wish) {
-    return Writer.start(wish).then(opened);
+    return Writer.start(wish).then(function (made) { return opened(made); });
 }
 
 // Writes the next chapter now, whether or not the reader is near the end
@@ -211,7 +225,7 @@ function askAuthor(bookId, question, spoilers) {
 function branch(bookId, difference, chapter) {
     const mine = own(bookId, "branched");
     const upTo = Math.max(1, Math.min(mine.story.chapters.length, Number(chapter) || Reading.place(mine.book.id).section + 1));
-    return Writer.fork(mine.story, mine.book.id, upTo, difference).then(opened);
+    return Writer.fork(mine.story, mine.book.id, upTo, difference).then(function (made) { return opened(made, upTo); });
 }
 
 // Starts a new story in the world of one that has ended.
@@ -219,7 +233,7 @@ function sequel(bookId, wish) {
     const mine = own(bookId, "followed by a sequel");
     if (!mine.story.ended)
         throw new Error("\"" + mine.story.title + "\" has not ended yet; a sequel follows an ending. You can branch it instead.");
-    return Writer.sequel(mine.story, wish).then(opened);
+    return Writer.sequel(mine.story, wish).then(function (made) { return opened(made); });
 }
 
 // Picks up a story, branch or sequel that was cut off or that failed: the
@@ -228,7 +242,9 @@ function resume(storyId) {
     const job = storyId ? Jobs.read(storyId) : unfinishedStories()[0] || Jobs.all()[0];
     if (!job)
         throw new Error("Nothing was left unfinished.");
-    return Writer.run(job).then(function (made) { return job.kind === "chapter" ? made : opened(made); });
+    return Writer.run(job).then(function (made) {
+        return job.kind === "chapter" ? made : opened(made, job.kind === "fork" ? job.upTo : 0);
+    });
 }
 
 // Gives up on something unfinished: the job, and a story that never
@@ -298,21 +314,30 @@ function checkOriginality(text) { return Originality.hitsIn({text: Util.text(tex
 // What would be told to the model about the reader's taste.
 function taste() { return Taste.profile(); }
 
-// For the panel, which can't wait for a promise: starts something and
-// answers at once. What comes of it shows in the panel and at the bottom
-// of the window.
+// Opens Omabook's own graph view on what the reader knows of a story's
+// world: the "seen" graph, never the plan.
+function showWorld(bookId) {
+    const mine = own(bookId, "looked into");
+    omabook.ui.showGraph({scope: mine.story.world.seen});
+    return mine.story.world.seen;
+}
+
+// What the panel asks for, by name. The panel calls this with
+// backend.scripts.request, which answers through a signal when the promise
+// settles, so a button gets what really came of it: the result, or the
+// reason it could not be done, which the panel shows.
 function panel(action, bookId, text) {
-    const actions = {steer: steer, ask: askAuthor, next: nextChapter, branch: branch, sequel: sequel};
-    try {
-        if (action === "askSpoilers")
-            Promise.resolve(askAuthor(bookId, text, true)).then(null, tell);
-        else if (actions[action])
-            Promise.resolve(actions[action](bookId, text)).then(null, tell);
-        else
-            throw new Error("The panel asked for something unknown: " + action);
-    } catch (error) {
-        tell(error);
-    }
-    Status.refresh();
-    return true;
+    const actions = {
+        steer: steer, ask: askAuthor, next: nextChapter, world: showWorld,
+        askSpoilers: function (book, question) { return askAuthor(book, question, true); }
+    };
+    if (!actions[action])
+        throw new Error("The panel asked for something unknown: " + action);
+    return Promise.resolve(actions[action](bookId, text)).then(function (result) {
+        Status.refresh();
+        return result;
+    }, function (error) {
+        Status.refresh();
+        throw error;
+    });
 }

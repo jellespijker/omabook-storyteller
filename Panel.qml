@@ -27,8 +27,10 @@ Flickable {
         return ""
     }
     readonly property var view: plugin !== "" ? backend.scripts.data[plugin].view : ({})
-    // The script knows which book is open from the reader's events; while
-    // they disagree (a book just opened), the panel shows nothing of it.
+    // Omabook shows this panel only beside books the plugin made (`when:
+    // "generated"` in main.js). The script knows which book is open from
+    // the reader's events; while the two disagree (a book just opened),
+    // the panel shows nothing of it.
     readonly property bool mine: !!view.mine && view.book === reader.bookId
     readonly property bool busy: view.state === "running"
 
@@ -36,11 +38,27 @@ Flickable {
     readonly property color faint: theme.colors.muted
     readonly property color line: theme.colors.selection
 
-    // Starts something in the script. It can't wait for the answer (a call
-    // from QML must come straight back), so what comes of it arrives as a
-    // new "view".
+    // What the last thing asked of the script came to, when it could not
+    // be done: shown under the state line until something else is asked.
+    property string problem: ""
+    property int asked: -1
+
+    // Asks the script for something. `request` answers at once with a
+    // number and later, through the `answered` signal, with what came of
+    // it: the result, or why not. A chapter takes minutes; the panel
+    // stays usable meanwhile.
     function tell(action, text) {
-        backend.scripts.call(plugin, "panel", [action, reader.bookId, text || ""])
+        problem = ""
+        asked = backend.scripts.request(plugin, "panel", [action, reader.bookId, text || ""])
+    }
+
+    Connections {
+        target: backend.scripts
+        function onAnswered(id, result, error) {
+            if (id !== panel.asked) return
+            panel.asked = -1
+            panel.problem = error || ""
+        }
     }
 
     contentWidth: width
@@ -111,15 +129,6 @@ Flickable {
             font.bold: true
         }
 
-        // Any other book: the panel has nothing to offer but where stories start.
-        Words {
-            visible: !panel.mine
-            color: panel.faint
-            text: view.unfinished > 0
-                  ? "A story was left unfinished. In the library, \"Write me a story\" (Ctrl+Shift+W) picks it up."
-                  : "This book is not one of Storyteller's. In the library, \"Write me a story\" (Ctrl+Shift+W) starts one."
-        }
-
         Column {
             visible: panel.mine
             width: parent.width
@@ -161,6 +170,12 @@ Flickable {
                     width: parent.width - mark.width - parent.spacing
                     text: view.line || ""
                 }
+            }
+            Words {
+                objectName: "storytellerProblem"
+                visible: text !== ""
+                color: theme.colors.red
+                text: panel.problem
             }
             Words {
                 visible: text !== ""
@@ -240,17 +255,19 @@ Flickable {
                     onClicked: panel.tell("next")
                 }
                 // These two ask a question first, in Omabook's own dialog,
-                // by running the plugin's commands.
+                // by running the plugin's commands. A command is named
+                // with its plugin, "<plugin>:<id>": a bare id only works
+                // while no other plugin has one of the same name.
                 Action {
                     objectName: "storytellerBranch"
                     text: "Branch from here"
-                    onClicked: backend.scripts.run("story-branch", reader.bookId)
+                    onClicked: backend.scripts.run(panel.plugin + ":story-branch", reader.bookId)
                 }
                 Action {
                     objectName: "storytellerSequel"
                     visible: !!view.ended
                     text: "Write a sequel"
-                    onClicked: backend.scripts.run("story-sequel", reader.bookId)
+                    onClicked: backend.scripts.run(panel.plugin + ":story-sequel", reader.bookId)
                 }
             }
 
@@ -287,13 +304,13 @@ Flickable {
                     }
                 }
             }
-            // Omabook's graph view can't be opened on a scope from a
-            // plugin, so the panel says where the graph is instead.
-            Words {
+            // The whole of it, in Omabook's own graph view: the reader's
+            // graph of this story, opened beside the page.
+            Action {
+                objectName: "storytellerGraph"
                 visible: (view.known || []).length > 0
-                color: panel.faint
-                font.pixelSize: 11
-                text: "The whole of it: omabook graph show --scope " + (view.seen || "")
+                text: "Show as a graph"
+                onClicked: panel.tell("world")
             }
         }
     }
