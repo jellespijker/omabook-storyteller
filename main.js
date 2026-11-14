@@ -32,7 +32,9 @@ omabook.include("lib/prompts.js");      // Prompts: every word sent to the model
 omabook.include("lib/ai.js");           // Ai: asking the model, checking the answer
 omabook.include("lib/originality.js");  // Originality: the forbidden names
 omabook.include("lib/taste.js");        // Taste: what the reader likes, as abstractions
+omabook.include("lib/skills.js");       // Skills: Markdown files that shape how a story is written
 omabook.include("lib/world.js");        // World: the two graphs of a story
+omabook.include("lib/checks.js");       // Checks: what a program can count in a draft
 omabook.include("lib/jobs.js");         // Jobs: work in progress, kept on disk
 omabook.include("lib/status.js");       // Status: the panel and the line at the bottom
 omabook.include("lib/writer.js");       // Writer: a new story, a chapter, a branch, a sequel
@@ -88,7 +90,17 @@ command("story-write", "Write me a story", "library", "Ctrl+Shift+W", "always", 
         return resume(unfinished.story);
     }
     return askReader("What are you in the mood for?", "A mood, a kind of story, a what-if. Leave empty to be surprised.")
-        .then(function (wish) { return wish === null ? null : startStory(wish); });
+        .then(function (wish) {
+            if (wish === null)
+                return null;
+            // Then which skills to write it with. The dialog has one line, so
+            // the choices are in its hint; `skills` lists them all.
+            const some = Skills.all().slice(0, 8).map(function (skill) { return skill.id; }).join(", ");
+            const defaults = Config.get("skills");
+            return askReader("Any skills to write it with?", (defaults.length ? "Empty keeps yours (" + defaults.join(", ") + "). " : "Empty: the house style. ")
+                             + "E.g. " + some + "…")
+                .then(function (chosen) { return chosen === null ? null : startStory(wish, chosen); });
+        });
 });
 
 command("story-next", "Storyteller: write the next chapter now", "reader", "Ctrl+Shift+N", "generated", function (context) {
@@ -116,6 +128,13 @@ command("story-branch", "Storyteller: branch the story from here", "reader", "Ct
     own(context.book, "branched");
     return askReader("How should it go differently from here?", "What changes from this chapter on.")
         .then(function (difference) { return difference === null ? null : branch(context.book, difference); });
+});
+
+command("story-skills", "Storyteller: choose the story's skills", "reader", "Ctrl+Shift+K", "generated", function (context) {
+    const mine = own(context.book, "changed");
+    return omabook.ui.ask({title: "Which skills should it be written with?", placeholder: "Names, with commas; empty for none. The panel lists them.",
+                           text: Util.list(mine.story.skills).map(function (skill) { return skill.id; }).join(", ")})
+        .then(function (words) { return words === null ? null : setSkills(context.book, words || []); });
 });
 
 command("story-sequel", "Storyteller: write a sequel in this world", "global", "Ctrl+Shift+E", "generated", function (context) {
@@ -190,8 +209,31 @@ function opened(made, section) {
 // Starts a story: builds its world, plans it, writes chapter one, adds the
 // book and opens it. `wish` is what the reader is in the mood for; empty
 // is "surprise me". A promise of {book, story, title, chapter, ...}.
-function startStory(wish) {
-    return Writer.start(wish).then(function (made) { return opened(made); });
+//
+// `skills` is which skills to write it with: a list of names, or words
+// ("lush, kishotenketsu"); left out or empty, the defaults in the settings.
+function startStory(wish, skills) {
+    const chosen = pickSkills(skills, true);
+    return Writer.start(wish, chosen.map(Skills.snapshot)).then(function (made) { return opened(made); });
+}
+
+// Skills named in words or as a list, settled, or an Error that says which
+// names were not understood. `orDefaults`: nothing named is the defaults.
+function pickSkills(asked, orDefaults) {
+    let ids = asked;
+    if (!Array.isArray(asked)) {
+        const chosen = Skills.choose(asked || "");
+        if (chosen.unknown.length > 0)
+            throw new Error("There is no skill for \"" + chosen.unknown.join("\", \"") + "\". These are the skills: "
+                            + Skills.all().map(function (skill) { return skill.id; }).join(", ") + ".");
+        ids = chosen.ids;
+    }
+    if (ids.length === 0 && orDefaults)
+        ids = Config.get("skills");
+    const settled = Skills.settle(ids);
+    if (settled.problems.length > 0)
+        throw new Error("Those skills can't be used: " + settled.problems.join("; ") + ".");
+    return settled.skills;
 }
 
 // Writes the next chapter now, whether or not the reader is near the end
@@ -229,11 +271,60 @@ function branch(bookId, difference, chapter) {
 }
 
 // Starts a new story in the world of one that has ended.
-function sequel(bookId, wish) {
+// It is written with the skills of the first, unless `skills` names others.
+function sequel(bookId, wish, skills) {
     const mine = own(bookId, "followed by a sequel");
     if (!mine.story.ended)
         throw new Error("\"" + mine.story.title + "\" has not ended yet; a sequel follows an ending. You can branch it instead.");
-    return Writer.sequel(mine.story, wish).then(function (made) { return opened(made); });
+    const chosen = skills ? pickSkills(skills, false).map(Skills.snapshot) : [];
+    return Writer.sequel(mine.story, wish, chosen).then(function (made) { return opened(made); });
+}
+
+// --- Skills ---------------------------------------------------------------
+// The skills there are (with `true`, also those switched off or broken,
+// with why), one in full, adding the reader's own, and a story's skills.
+
+function skills(everything) { return Skills.all(!!everything).map(Skills.summary); }
+
+function skill(id) {
+    const found = Skills.find(id, true);
+    if (!found)
+        throw new Error("There is no skill called \"" + Util.text(id) + "\".");
+    return Object.assign(Skills.summary(found), {body: found.body, cues: found.cues, excludes: found.excludes, path: found.path || ""});
+}
+
+// A skill's SKILL.md, as text (see README: "Writing a skill"). It is
+// checked like every other and kept in data/skills/<name>/SKILL.md.
+function addSkill(text) { return Skills.add(text); }
+
+// A skill from GitHub: owner/repo, or a link to a repository, a folder or
+// a SKILL.md (a folder of several installs them all). Needs "http".
+function installSkill(address) { return Skills.install(address); }
+
+function removeSkill(id) { return Skills.remove(id); }
+
+// Switches a skill off (it is offered to no story and shapes none), or on.
+function switchSkill(id, on) { return Skills.switchOn(id, on !== false); }
+
+// A story's skills, and when they were chosen or changed.
+function storySkills(bookId) {
+    const mine = own(bookId, "looked into");
+    return {skills: Util.list(mine.story.skills).map(function (one) { return {id: one.id, name: one.name, kind: one.kind}; }),
+            log: Util.list(mine.story.skillLog)};
+}
+
+// Sets the skills a story is written with from its next chapter on: a list
+// of names, or words. An empty list is none.
+function setSkills(bookId, ids, by) {
+    const mine = own(bookId, "changed"), chosen = pickSkills(ids, false), story = mine.story;
+    story.skills = chosen.map(Skills.snapshot);
+    story.skillLog = Util.list(story.skillLog).concat([{at: Util.now(), chapter: story.chapters.length + 1,
+                                                        skills: chosen.map(function (one) { return one.id; }), by: by || "reader"}]);
+    Stories.save(story);
+    Status.refresh();
+    omabook.say(chosen.length ? "From chapter " + (story.chapters.length + 1) + " on it is written with: " + Skills.names(story.skills) + "."
+                              : "From chapter " + (story.chapters.length + 1) + " on it is written without skills.");
+    return storySkills(bookId);
 }
 
 // Picks up a story, branch or sequel that was cut off or that failed: the
@@ -267,7 +358,7 @@ function stories() {
     return Stories.all().map(function (story) {
         const book = Stories.bookOf(story);
         return {story: story.id, book: book ? book.id : 0, title: story.title, chapters: story.chapters.length, planned: story.plan.chapters,
-                ended: story.ended, lineage: story.lineage ? {kind: story.lineage.kind, story: story.lineage.story, chapter: story.lineage.chapter} : null,
+                ended: story.ended, skills: Util.list(story.skills).map(function (one) { return one.id; }), lineage: story.lineage ? {kind: story.lineage.kind, story: story.lineage.story, chapter: story.lineage.chapter} : null,
                 state: Jobs.state(story.id), cost: story.cost || null};
     });
 }
@@ -329,7 +420,20 @@ function showWorld(bookId) {
 function panel(action, bookId, text) {
     const actions = {
         steer: steer, ask: askAuthor, next: nextChapter, world: showWorld,
-        askSpoilers: function (book, question) { return askAuthor(book, question, true); }
+        askSpoilers: function (book, question) { return askAuthor(book, question, true); },
+        // The skills: `text` is a skill's name, or for "pasteSkill" its whole
+        // SKILL.md, for "installSkill" a GitHub address.
+        addSkill: function (book, id) {
+            const now = Util.list(own(book, "changed").story.skills).map(function (one) { return one.id; });
+            return setSkills(book, now.concat([id]), "panel");
+        },
+        removeSkill: function (book, id) {
+            const now = Util.list(own(book, "changed").story.skills).map(function (one) { return one.id; });
+            return setSkills(book, now.filter(function (other) { return other !== id; }), "panel");
+        },
+        pasteSkill: function (book, text) { return Skills.add(text); },
+        installSkill: function (book, address) { return Skills.install(address); },
+        switchOff: function (book, id) { return Skills.switchOn(id, false); }
     };
     if (!actions[action])
         throw new Error("The panel asked for something unknown: " + action);

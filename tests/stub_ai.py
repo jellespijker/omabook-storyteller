@@ -106,13 +106,18 @@ def cast():
 def beat(number, last):
     return {"chapter": number, "title": "Tally %d" % number, "pov": "Ilse Marrow", "goal": "Find line %d of the ledger." % number,
             "events": "She follows the glass.", "seeds": "A cracked weight." if number == 1 else "",
-            "turn": "The ledger closes." if number == last else "The count is off by one."}
+            "scenes": [{"goal": "Weigh the tithe.", "conflict": "The scale is wrong.", "outcome": "no-and: one weight is missing"}],
+            "turn": "The ledger closes." if number == last else "The count is off by one.", "hook": "Who took weight %d?" % number}
 
 
 def plot(chapters, title=None):
     made = {
-        "threads": [{"name": "The forged ledger", "summary": "Who altered the tithe?", "involves": ["Ilse Marrow", "Tide Court"]}],
-        "promises": [{"name": "The court will sit", "summary": "The reader is promised a trial."}],
+        "structure": "Try-fail cycles: every count she makes fails worse, until the trial.",
+        "arcs": [{"name": "The short count", "chapters": [1, chapters // 2], "purpose": "She finds the fraud.", "ends_with": "She is accused."},
+                 {"name": "The trial", "chapters": [chapters // 2 + 1, chapters], "purpose": "She proves it.", "ends_with": "The court sits."}],
+        "threads": [{"name": "The forged ledger", "kind": "inquiry", "summary": "Who altered the tithe?", "opened_in": 1, "closed_in": chapters,
+                     "involves": ["Ilse Marrow", "Tide Court"]}],
+        "promises": [{"name": "The court will sit", "summary": "The reader is promised a trial.", "opened_in": 1, "pays_off_in": chapters}],
         "twists": [{"name": "The judge opened the sluices", "summary": "TWISTSECRET: Teodor Vash drowned the counting house himself.",
                     "seeds": ["A cracked weight", "Wet boots on a dry day"], "seeded_in": [1, 2], "pays_off_in": chapters,
                     "changes": "Every kindness of his.", "involves": ["Teodor Vash"]}],
@@ -143,7 +148,12 @@ def replan(prompt):
     for item in beats:
         item["goal"] = "Revised: " + item["goal"]
     branch = "go another way" in prompt
+    # A wish about how it is written chooses a skill from the menu.
+    now = re.search(r"written now: (.*)\.", prompt)
+    current = [] if not now or now.group(1) == "none" else now.group(1).split(", ")
+    skills = current + ["lush-lyrical", "made-up-skill"] if "lusher" in prompt and "- lush-lyrical (style)" in prompt else []
     return {"title": "The Glass Tithe: The Other Door" if branch else "", "note": "The road bends a little from here.", "beats": beats,
+            "skills": skills,
             "twists": [{"name": "The weights were hers", "summary": "TWISTSECRET2: Quenna Dray made the false weights.",
                         "seeds": ["Burned hands"], "seeded_in": [start], "pays_off_in": last, "changes": "Her help."}],
             "endings": [], "characters": []}
@@ -178,8 +188,25 @@ def update(prompt):
                       {"from": "Ilse Marrow", "to": "Weight of chapter %d" % number, "relation": "found"}],
         "seeds_planted": ["The judge opened the sluices"] if number <= 2 else [],
         "twists_paid": [], "promises_kept": [],
+        "people": [{"name": "Ilse Marrow", "where": "On the Ninefold stair, chapter %d" % number, "learned": "Weight %d is false." % number,
+                    "wants_now": "To find the forger.", "changed": "She stops trusting the court." if number == 2 else ""}],
+        "threads": [{"name": "The forged ledger", "state": "Open after chapter %d." % number}],
+        "when": "Day %d, at slack water." % number,
+        "questions": ["Who cracked weight %d?" % number],
     }
     return made
+
+
+def revise(prompt):
+    """The editor: it mends the one sentence every stub chapter repeats from the prompt's lists."""
+    draft = blocks(prompt)[0]
+    edits = []
+    if "The harbour smelled of kelp and hot sand." in draft:
+        edits.append({"find": "The harbour smelled of kelp and hot sand.", "replace": "REVISED: the harbour smelled of kelp.", "why": "repetition"})
+    # One edit that is not in the draft at all, which must be left out.
+    edits.append({"find": "A sentence the draft never had.", "replace": "Anything.", "why": "clarity"})
+    return {"checks": {"continuity": "ok", "viewpoint": "ok", "scenes": "ok", "ending": "ok", "clarity": "ok",
+                       "repetition": "a stock image", "telling": "ok", "skills": "ok", "originality": "ok"}, "edits": edits}
 
 
 def rename(prompt, control):
@@ -189,6 +216,19 @@ def rename(prompt, control):
         # Out of one taken name, into another.
         return {"renames": {hit: TAKEN_PERSON if hit == TAKEN_PLACE else TAKEN_PLACE for hit in hits}}
     return {"renames": {hit: fresh[index % len(fresh)] for index, hit in enumerate(hits)}}
+
+
+def eval_draft(prompt):
+    """A scene for a skill's eval: short sentences when a skill is in the prompt, long ones without."""
+    if "<<<skill:" in prompt:
+        return "She shut the door. The lamp hissed. She counted the coins twice and put them away."
+    return "She shut the door very slowly, and it seemed to her that the lamp was hissing like a symphony of small regrets, a testament to the night."
+
+
+def grade(prompt):
+    """A grader that passes every statement, unless told the text fails."""
+    statements = [line[2:].strip() for line in blocks(prompt)[1].splitlines() if line.startswith("- ")]
+    return {"grades": [{"text": text, "passed": "testament" not in blocks(prompt)[0], "evidence": "stub"} for text in statements]}
 
 
 def main():
@@ -226,6 +266,13 @@ def main():
         answer = update(prompt)
     elif task == "rename":
         answer = rename(prompt, control)
+    elif task == "revise":
+        answer = revise(prompt)
+    elif task == "eval":
+        print(eval_draft(prompt))
+        return
+    elif task == "grade":
+        answer = grade(prompt)
     elif task == "chapter":
         print(chapter(prompt, control))
         return
