@@ -280,7 +280,7 @@ def main():
                 for name in ("Vesper Quill", "Harrowgate", "Brass Orchard", "Tolland"):
                     assert name not in call["prompt"], (call["task"], name)
         tiers = {call["task"]: call["tier"] for call in bench.calls()}
-        assert tiers == {"world": "main", "cast": "main", "plot": "main", "chapter": "main", "revise": "main", "update": "quick", "rename": "quick"}, tiers
+        assert tiers == {"world": "main", "cast": "main", "plot": "main", "chapter": "main", "revise": "quick", "update": "quick", "rename": "quick"}, tiers
         update_prompt = [call["prompt"] for call in bench.calls() if call["task"] == "update"][0]
         assert "TWISTSECRET" not in update_prompt and "The judge opened the sluices" in update_prompt, "the quick model is shown a twist's label, not its truth"
         world_prompt = bench.calls()[0]["prompt"]
