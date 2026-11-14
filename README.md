@@ -10,11 +10,17 @@ Everything it writes is original by rule: it may not reuse the characters, place
 ## Install
 
 ```bash
-omabook plugin install /path/to/omabook-storyteller --name storyteller   # a folder or a .zip; it is checked first
-omabook plugins enable folder:storyteller                                # it is off until you say so
+omabook plugin add jellespijker/omabook-storyteller   # fetched from GitHub and checked first; it asks before switching on
 ```
 
-Or press `P` in Omabook, `I` to install, and `Space` to switch it on. It needs an AI set up in Omabook's settings (`,`); whatever you chose there writes the stories.
+Or press `P` in Omabook, `I` to install, paste `jellespijker/omabook-storyteller`, and choose "Install and Switch On". Installed this way it keeps itself up to date: an update that asks for nothing new arrives by itself (and can be rolled back), and one that asks for a new permission waits for you to review it.
+
+To work on the plugin, install it from a folder instead:
+
+```bash
+omabook plugin install /path/to/omabook-storyteller --name storyteller   # a folder or a .zip; it is checked first
+omabook plugins enable folder:storyteller                                # it is off until you say so
+``` It needs an AI set up in Omabook's settings (`,`); whatever you chose there writes the stories.
 
 ### What it asks to be allowed
 
