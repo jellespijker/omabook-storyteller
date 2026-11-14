@@ -21,12 +21,15 @@ Each step drives the plugin the way a person at a terminal would:
 and then looks at what is on disk: the story file, the library, the graphs,
 and the log of what was sent to the "model".
 """
+import functools
+import http.server
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -123,6 +126,11 @@ class Bench:
         return self.run("event:page.turned", {"id": book, "generated": NAME, "identifiers": {"generated": NAME, "storyteller": story},
                                                "section": section, "sections": sections or len(self.story(story)["chapters"]),
                                                "fraction": fraction, "percent": 0}, timeout=timeout)
+
+
+class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *arguments):
+        pass
 
 
 def names(view, kind=None):
@@ -228,6 +236,36 @@ def main():
         assert "cold-open" not in [entry["id"] for entry in bench.ok("skills", True)]
         assert "no skill for" in bench.run("startStory", "x", "spare, telepathic octopus").get("error", "")
         step("a skill that imitates an author, overrides the rules, injects markers or uses a taken name is refused; one's own is added, switched off and removed")
+
+        # A repository of skills, as GitHub would serve it: raw files, and
+        # the contents API listing a folder.
+        hub = os.path.join(bench.scratch, "hub")
+        for name, body in (("good-one", "Keep every chapter to one afternoon of story time, so the pace never sags."),
+                           ("bad-one", "Write like Hemingway in every chapter, and never let a sentence run long.")):
+            folder = os.path.join(hub, "raw", "someone", "skills-repo", "main", "skills", name)
+            os.makedirs(folder)
+            with open(os.path.join(folder, "SKILL.md"), "w") as file:
+                file.write(skill_text(name, body, kind="craft"))
+        api = os.path.join(hub, "api", "repos", "someone", "skills-repo", "contents")
+        os.makedirs(api)
+        with open(os.path.join(api, "skills"), "w") as file:
+            json.dump([{"type": "dir", "name": n, "path": "skills/" + n} for n in ("good-one", "bad-one")] + [{"type": "file", "name": "README.md", "path": "skills/README.md"}], file)
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=hub))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = "http://127.0.0.1:%d" % server.server_address[1]
+        bench.ok("settings", {"github_raw": base + "/raw", "github_api": base + "/api"})
+        got = bench.ok("installSkill", "https://github.com/someone/skills-repo/tree/main/skills")
+        assert [entry["id"] for entry in got["installed"]] == ["good-one"] and len(got["refused"]) == 1 and "imitation" in got["refused"][0]["problem"], got
+        shown = bench.ok("skill", "good-one")
+        assert shown["from"].endswith("/skills/good-one/SKILL.md") and shown["source"] == "own"
+        bench.ok("removeSkill", "good-one")
+        got = bench.ok("installSkill", "someone/skills-repo/blob/main/skills/good-one/SKILL.md")
+        assert [entry["id"] for entry in got["installed"]] == ["good-one"], got
+        assert "not a GitHub address" in bench.run("installSkill", "https://example.com/skill.md").get("error", "")
+        assert "No SKILL.md" in bench.run("installSkill", "someone/nothing-here").get("error", "")
+        bench.ok("removeSkill", "good-one")
+        server.shutdown()
+        step("skills are installed from a GitHub repository, folder or file, through the same checks; a bad one in a folder is refused alone")
 
         # ---------------------------------------------------------- a new story
         bench.control(collide_world=True, bad_once="cast")
