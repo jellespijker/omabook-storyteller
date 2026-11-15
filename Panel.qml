@@ -478,6 +478,13 @@ Flickable {
                 text: "Show as a graph"
                 onClicked: panel.tell("world")
             }
+            // Asks first, in Omabook's own form, saying what goes.
+            Action {
+                objectName: "storytellerRemove"
+                enabled: !panel.busy
+                text: "Remove this story…"
+                onClicked: backend.scripts.run(panel.plugin + ":story-remove", reader.bookId)
+            }
         }
     }
 }

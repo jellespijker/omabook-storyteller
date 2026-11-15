@@ -152,9 +152,11 @@ def main():
         check = bench.json("plugin", "check", NAME, "--folder", bench.plugins)
         assert check["ok"], check
         registered = json.dumps(check["registered"])
-        for expected in ("story-write", "story-steer", "story-ask", "story-branch", "story-sequel", "story-next", "Storyteller story", "page.turned"):
+        for expected in ("story-write", "story-steer", "story-ask", "story-branch", "story-sequel", "story-next", "story-remove",
+                         "story-shelf", "Storyteller story", "page.turned", "book.removed"):
             assert expected in registered, (expected, registered)
-        step("the plugin loads and registers its format, panel, commands and events")
+        assert [(one["id"], one["title"], one["author"]) for one in check["registered"]["launchers"]] == [("new", "Write a new story", "Storyteller")]
+        step("the plugin loads and registers its format, its entry on the shelf, its panel, commands and events")
 
         # An ordinary book, by a person, with what the graph knows of it.
         human_file = os.path.join(bench.scratch, "The Brass Orchard.md")
@@ -580,6 +582,123 @@ def main():
         general = bench.json("graph", "show")
         assert not [node for node in general["nodes"] if node["name"] in ("Ilse Marrow", "Teodor Vash", "Brinehollow")]
         step("the general graph holds nothing of the made-up worlds")
+
+        # ------------------------------------------------- from the shelf
+        # Opening "Write a new story" with no window: the form is answered
+        # null, so nothing is started, and nothing is asked of the model.
+        bench.control()
+        opened = bench.run("launcher:new", {})
+        assert not opened.get("error") and opened["result"] is None and bench.tasks() == [], opened
+        bench.ok("settings", {"shelf_entry": False})
+        hidden = bench.json("plugin", "check", NAME, "--folder", bench.plugins)
+        assert hidden["registered"]["launchers"] == [], "taken off the shelf, it stays off"
+        bench.ok("command:story-shelf", {})
+        assert bench.json("plugin", "check", NAME, "--folder", bench.plugins)["registered"]["launchers"][0]["id"] == "new"
+        step("opening the shelf entry with nowhere to show the form starts nothing; taken off the shelf it stays off until put back")
+
+        form = bench.ok("storyForm")
+        fields = {field["id"]: field for field in form["fields"]}
+        assert form["title"] == "Write a new story" and form["accept"] == "Start Writing"
+        assert list(fields) == ["wish", "where", "story", "chapter", "skills", "pov", "tone", "chapters", "words"], list(fields)
+        assert [choice["value"] for choice in fields["where"]["choices"]] == ["new", "world", "sequel", "branch"]
+        offered = {choice["value"]: choice for choice in fields["story"]["choices"]}
+        assert story_id in offered and fork_id in offered and sequel_id in offered and "ended" in offered[story_id]["help"]
+        assert fields["story"]["when"] == {"where": ["world", "sequel", "branch"]} and fields["chapter"]["when"] == {"where": "branch"}
+        assert {choice["value"] for choice in fields["skills"]["choices"]} == {skill["id"] for skill in bench.ok("skills")}
+        assert fields["chapters"]["value"] == 4 and fields["words"]["value"] == 200 and fields["words"]["step"] == 50
+        step("the form offers a world of its own, a story in the world of one, a sequel to one that ended, and a branch from a chapter")
+
+        bench.control()
+        alone = bench.ok("startFromForm", {"wish": "a lighthouse that counts ships", "where": "new", "skills": [], "tone": "wry",
+                                           "pov": "first", "chapters": 3, "words": 300})
+        alone_story = bench.story(alone["story"])
+        assert alone_story["length"] == {"chapters": 3, "words": 300} and alone_story["plan"]["chapters"] == 3 and alone_story["skills"] == []
+        sent = bench.calls()
+        assert "a lighthouse that counts ships Tone: wry. Tell it in the first person." in sent[0]["prompt"], sent[0]["prompt"][:600]
+        assert "for exactly 3 chapters" in [call for call in sent if call["task"] == "plot"][0]["prompt"]
+        assert "300" in [call for call in sent if call["task"] == "chapter"][0]["prompt"]
+        assert bench.json("progress", alone["book"])["section"] == 0
+        step("a story of its own starts from the form with its wish, tone, point of view, skills and length")
+
+        bench.control()
+        spun = bench.ok("startFromForm", {"wish": "the lamplighters' strike", "where": "world", "story": story_id})
+        spinoff, parent = bench.story(spun["story"]), bench.story(story_id)
+        assert bench.tasks()[0] == "spinoff" and "never contradict it" in bench.calls()[0]["prompt"], bench.tasks()
+        assert "Ilse Marrow" in bench.calls()[0]["prompt"] and "the lamplighters' strike" in bench.calls()[0]["prompt"]
+        assert spinoff["lineage"]["kind"] == "world" and spinoff["lineage"]["story"] == story_id and spinoff["title"] == "The Lantern Ward"
+        assert spinoff["world"]["plan"] == "world:" + spun["story"] + ":plan" and spinoff["world"]["plan"] != parent["world"]["plan"]
+        spun_plan = bench.scope(spinoff["world"]["plan"])
+        assert "Ilse Marrow" in names(spun_plan) and "Marit Sallow" in names(spun_plan), names(spun_plan)
+        # What the other book never told is not handed on: its endings, the
+        # secrets of its people and places.
+        asked = bench.calls()[0]["prompt"]
+        for untold in ("ENDINGSECRET", "She altered one line herself", "Two judges owe the glassblowers", "Its vault was emptied"):
+            assert untold not in asked, untold
+        assert "Marit Sallow" not in names(bench.scope(plan)), "the parent's world is untouched"
+        assert [skill["id"] for skill in spinoff["skills"]] == [skill["id"] for skill in parent["skills"]]
+        assert "A story in the world of" in bench.json("show", spun["book"])["description"]
+        step("a new story in the world of another shares the world in a copy of its own, without its plot to come or its secrets")
+
+        bench.control()
+        refused = bench.run("startFromForm", {"where": "sequel", "story": sequel_id})
+        assert "has not ended yet" in refused.get("error", "") and bench.tasks() == [], refused
+        refused = bench.run("startFromForm", {"where": "world", "story": "nosuchstory"})
+        assert "Choose which of your stories" in refused.get("error", ""), refused
+        bench.control()
+        after = bench.ok("startFromForm", {"where": "sequel", "story": story_id, "wish": "the ferryman's debt", "skills": ["wry"]})
+        assert bench.story(after["story"])["lineage"]["kind"] == "sequel" and [one["id"] for one in bench.story(after["story"])["skills"]] == ["wry"]
+        bench.control()
+        other_way = bench.ok("startFromForm", {"where": "branch", "story": story_id, "wish": "What if the scale is honest?", "chapter": 1})
+        assert bench.story(other_way["story"])["lineage"]["kind"] == "fork" and bench.story(other_way["story"])["lineage"]["chapter"] == 1
+        assert bench.tasks()[0] == "replan" and "What if the scale is honest?" in bench.calls()[0]["prompt"]
+        step("a sequel and a branch start from the form too; a sequel to one that has not ended is refused before anything is asked")
+
+        # ------------------------------------------------- removing a story
+        def scopes():
+            return [entry["scope"] for entry in bench.json("graph", "scopes")["scopes"]]
+
+        lone = bench.ok("removalPlan", alone["book"])
+        assert lone["family"] == [] and lone["scopes"] == ["world:" + alone["story"], "world:" + alone["story"] + ":plan"]
+        assert lone["files"] == ["data/stories/" + alone["story"] + ".story"], lone
+        gone = bench.ok("removeStory", alone["book"])
+        assert [one["story"] for one in gone["removed"]] == [alone["story"]] and gone["kept"] == []
+        assert alone["book"] not in [entry["id"] for entry in bench.json("list")]
+        assert not [scope for scope in scopes() if alone["story"] in scope]
+        assert not os.path.exists(os.path.join(bench.plugin, "data", "stories", alone["story"] + ".story"))
+        step("removing a story of its own takes its book (to the trash), both its graphs and its working copy")
+
+        shared = bench.ok("removalPlan", spun["book"])
+        related = {one["story"]: one["relation"] for one in shared["family"]}
+        assert related[story_id] == "parent" and {fork_id, sequel_id, after["story"], other_way["story"]} <= set(related), related
+        kept = bench.ok("removeStory", spun["book"], {"world": "keep"})
+        assert [one["story"] for one in kept["removed"]] == [spun["story"]] and story_id in [one["story"] for one in kept["kept"]]
+        assert not [scope for scope in scopes() if spun["story"] in scope] and seen in scopes() and plan in scopes()
+        assert "Ilse Marrow" in [node["name"] for node in bench.ok("world", book)["nodes"]], "the others' world is whole"
+        bench.control()
+        assert bench.ok("nextChapter", sequel_book)["chapter"] >= 2, "and a story that shares it goes on"
+        step("removing a story whose world is shared keeps the world for the others, who go on as before")
+
+        # Omabook's own Remove: the plugin hears of it, and with nobody to
+        # ask, keeps the world and the working copy, so the book can come back.
+        listed = {entry["id"]: entry for entry in bench.json("list")}
+        bench.omabook("remove", other_way["book"])
+        heard = bench.run("event:book.removed", {"id": other_way["book"], "book": listed[other_way["book"]]})
+        assert not heard.get("error") and os.path.exists(os.path.join(bench.plugin, "data", "stories", other_way["story"] + ".story"))
+        assert "world:" + other_way["story"] in scopes()
+        step("a story's book removed with Omabook's own Remove keeps its world unless the reader says otherwise")
+
+        second = [one for one in bench.ok("stories") if one["lineage"] is None and one["story"] not in (story_id,)]
+        assert second, "the story started on its own earlier"
+        everything = bench.ok("removeStory", book, {"world": "all"})
+        went = {one["story"] for one in everything["removed"]}
+        assert {story_id, sequel_id, fork_id, after["story"], other_way["story"]} == went, went
+        for story in went:
+            assert not [scope for scope in scopes() if story in scope], story
+            assert not os.path.exists(os.path.join(bench.plugin, "data", "stories", story + ".story"))
+        left = [entry["id"] for entry in bench.json("list")]
+        assert human in left and book not in left and sequel_book not in left and fork_book not in left
+        assert [one["story"] for one in bench.ok("stories")] == [second[0]["story"]], "a story of another world stays"
+        step("removing the world with every story in it takes them all, and nothing of any other world or book")
 
         # The plugin kept somewhere else than the plugin folder, as while
         # it is being written: its format still reads its books.
