@@ -260,6 +260,9 @@ def main():
         answer = plot(int(re.search(r"for exactly (\d+) chapters", prompt).group(1)))
     elif task == "sequel":
         answer = plot(int(re.search(r"of exactly (\d+) chapters", prompt).group(1)), "The Glass Debt")
+    elif task == "spinoff":
+        answer = plot(int(re.search(r"of exactly (\d+) chapters", prompt).group(1)), "The Lantern Ward")
+        answer["characters"][0]["name"] = "Marit Sallow"
     elif task == "replan":
         answer = replan(prompt)
     elif task == "update":
