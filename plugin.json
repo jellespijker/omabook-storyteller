@@ -1,6 +1,6 @@
 {
     "name": "Storyteller",
-    "version": "1.2",
+    "version": "1.2.1",
     "author": "",
     "description": "Writes an original book for you, chapter by chapter, as you read it. Start one from the shelf; steer it, ask the author, branch it.",
     "omabook": "0.1.4",

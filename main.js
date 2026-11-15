@@ -258,6 +258,12 @@ function writeFromTheShelf() {
     return omabook.ui.form(storyForm()).then(function (values) { return values ? startFromForm(values) : null; });
 }
 
+// The form put to Omabook as the shelf entry puts it, for the tests: Omabook
+// checks a form before drawing it, and throws when it can't be drawn.
+function formCheck() {
+    return omabook.ui.form(storyForm()).then(function () { return null; });
+}
+
 // The stories a new one can be linked to: those with a chapter, newest first.
 function toldStories() {
     return Stories.all().filter(function (story) { return story.chapters.length > 0; })
@@ -299,8 +305,8 @@ function storyForm() {
     fields.push(only({id: "skills", type: "multi", label: "Write it with", value: Config.get("skills"),
                       choices: Skills.all().map(function (skill) { return {value: skill.id, label: skill.title, help: skill.description}; }),
                       help: "Skills shape the style, the structure, the genre and the craft. None: the house style. A sequel or a story in another's world is written as that one was unless you choose."}));
-    fields.push(only({id: "pov", type: "choice", label: "Point of view", value: "",
-                      choices: [{value: "", label: "Let the story decide"}, {value: "first", label: "First person"},
+    fields.push(only({id: "pov", type: "choice", label: "Point of view", value: "story",
+                      choices: [{value: "story", label: "Let the story decide"}, {value: "first", label: "First person"},
                                 {value: "third", label: "Close third person"}],
                       help: "A skill that sets the point of view goes first."}));
     fields.push({id: "tone", type: "text", label: "Tone", placeholder: "Warm, eerie, wry, tender… Empty: the story finds its own."});

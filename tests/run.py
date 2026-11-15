@@ -606,6 +606,16 @@ def main():
         assert fields["story"]["when"] == {"where": ["world", "sequel", "branch"]} and fields["chapter"]["when"] == {"where": "branch"}
         assert {choice["value"] for choice in fields["skills"]["choices"]} == {skill["id"] for skill in bench.ok("skills")}
         assert fields["chapters"]["value"] == 4 and fields["words"]["value"] == 200 and fields["words"]["step"] == 50
+        # Omabook refuses a choice without a value; every choice has one, the
+        # default ones included.
+        for field in form["fields"]:
+            for choice in field.get("choices", []):
+                value = choice["value"] if isinstance(choice, dict) else choice
+                assert value != "", (field["id"], choice)
+        # And Omabook itself takes the form: drawn with no window, it is
+        # answered null rather than refused.
+        drawn = bench.run("formCheck", {})
+        assert not drawn.get("error"), drawn
         step("the form offers a world of its own, a story in the world of one, a sequel to one that ended, and a branch from a chapter")
 
         bench.control()
