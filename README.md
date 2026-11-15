@@ -12,10 +12,10 @@ How it plans and writes is built on what writers, editors and researchers know a
 ## Install
 
 ```bash
-omabook plugin add jellespijker/omabook-storyteller   # fetched from GitHub and checked first; it asks before switching on
+omabook plugin add storyteller   # it is in Omabook's list of plugins; fetched from GitHub and checked first
 ```
 
-Or press `P` in Omabook, `I` to install, paste `jellespijker/omabook-storyteller`, and choose "Install and Switch On". Installed this way it keeps itself up to date: an update that asks for nothing new arrives by itself (and can be rolled back), and one that asks for a new permission waits for you to review it.
+Or press `P` in Omabook and `I` to install: Storyteller is first under "Find plugins". Choose Install, read what it asks to be allowed, and choose "Install and Switch On". It needs Omabook 0.1.4 or newer. Installed this way it keeps itself up to date: an update that asks for nothing new arrives by itself (and can be rolled back), and one that asks for a new permission waits for you to review it.
 
 To work on the plugin, install it from a folder instead:
 
@@ -33,13 +33,49 @@ omabook plugins enable folder:storyteller                                # it is
 
 No programs (`run`). The model is reached through Omabook's own `omabook.ai.ask`, which needs no permission and uses the AI you set up.
 
-Version 1.1 added `http`. Installed from GitHub, that means the update to 1.1 does not install by itself: Omabook holds it until you have looked at the new permission and said yes. That is Omabook's safety rule working as meant. Without `http` everything but installing from GitHub still works (pasting a skill, or adding one from a file, needs no network).
+Version 1.2 starts stories from the shelf and removes them cleanly; it uses what Omabook 0.1.4 added for plugins (an entry on the shelf, and forms), so it needs Omabook 0.1.4 or newer. Version 1.1 added `http`. Installed from GitHub, that means the update to 1.1 does not install by itself: Omabook holds it until you have looked at the new permission and said yes. That is Omabook's safety rule working as meant. Without `http` everything but installing from GitHub still works (pasting a skill, or adding one from a file, needs no network).
 
 ## Using it
 
+### Starting from the shelf
+
+Switched on, Storyteller puts one entry at the start of the shelf, in every view of the library: **Write a new story**, with a cover Omabook draws from your theme and a plus on it, so it is never taken for a book. Open it the way you open a book (Space, Enter, a double click, a tap) and a form opens instead of the reader:
+
+| Field | What it does |
+|---|---|
+| What should it be? | A mood, a kind of story, a what-if. Empty: surprise me. |
+| Where does it live? | **A world of its own**; **a new story in the world of** one of yours; **a sequel** to one that has ended; or **a branch** of one from a chapter you choose. Offered once you have a story. |
+| Which story? / Branch from chapter | Shown when the story is linked to another. |
+| Write it with | The [skills](#skills), style, structure, genre and craft, ticked or not. Your default skills start ticked. A sequel or a story in another's world is written as that one was unless you tick others; a branch always is. |
+| Point of view, Tone | For what the skills leave open. |
+| Chapters, Words a chapter | This story's length. The settings' `chapters` and `chapter_words` are where they start. |
+
+"Start Writing" adds the book to the library at once, with a page that says how far the writing has got, and opens it. Chapter one replaces that page a few minutes later.
+
+How the four ways of linking differ:
+
+- **A world of its own**: everything new.
+- **A new story in the world of …**: the world as you know it from that book (its places, groups, rules, history, and what has happened in the chapters you have read), new people at the heart of it, and a plot of its own. The model is told that everything established is canon, never to be contradicted, and the earlier book's people may only pass through. What that book has not shown you yet (its plot still to come, its endings, the secrets of its people and places) is not handed on, so neither book spoils the other.
+- **A sequel to …**: the same world later, with what the earlier book left behind as its trouble and its plot as history. Only for a story that has ended.
+- **A branch of … from chapter N**: the chapters up to N, and from there it goes the way you asked.
+
+Each story keeps a copy of its world of its own (two scopes of Omabook's knowledge graph, see [The world is two graphs](#the-world-is-two-graphs)), so the stories of one world never write into each other's.
+
+The entry is not a book of the library: it is in no count, no reading statistics or suggestions, not in the knowledge graph, tidying, sync, catalogs or exports, and not in the file manager. It goes when Storyteller is switched off or removed. Remove it from the shelf (`Delete`, or Remove in its details) and it stays off; the command **Storyteller: put Write a new story on the shelf** brings it back.
+
+### Removing a story
+
+**Storyteller: remove this story** (in the reader, beside the story, or with the story selected on the shelf, and as a button at the end of the panel) asks first, and names what goes: the book (to the trash), its world (both graphs), its working copy in `data/`, and anything of it still unfinished. When other stories share its world (one was made from it, or it from one: a sequel, a branch, a story in its world), it says which, and asks whether to remove only this story, the others keeping their own copy of the world and going on as they are, or the world with every story in it. Nothing is removed while any of it is being written.
+
+Remove the book with Omabook's own Remove instead, and Storyteller asks once whether its world and working copy should go too. Leaving the question, or choosing "Keep them", keeps them: put the book back from the trash and the story goes on where it was. (Should the working copy be gone by then, opening the book makes it again from the library's copy.)
+
+From the command line: `removalPlan <book>` says what would go, and `removeStory <book or story id> {"world": "keep" | "all"}` removes it.
+
+### Keys
+
 | Where | Key | What |
 |---|---|---|
-| Library | `Ctrl+Shift+W` | **Write me a story.** Asks what you are in the mood for (leave it empty to be surprised), then which [skills](#skills) to write it with (leave it empty for your defaults). A few minutes later the book opens. |
+| Library | `Ctrl+Shift+W` | **Write me a story**: the same form as the entry on the shelf. |
 | Reader | `Ctrl+Shift+S` | **Steer the story**: "more of the smuggler", "kill nobody", "slower", "follow the sister". |
 | Reader | `Ctrl+Shift+A` | **Ask the author** about the story so far. No spoilers unless you ask for them in so many words ("spoil me: …"). |
 | Reader | `Ctrl+Shift+N` | **Write the next chapter now**, without waiting to be near the end. Also tries again after a problem. |
@@ -51,7 +87,7 @@ The keys can be changed in Omabook's `keys.json` like any other (`?` shows them)
 
 A story is an ordinary book in the library. Contents, search, bookmarks, the reading companion (`A`), catch-up and who-is-who all work on it, because Omabook reads it through the format this plugin registers.
 
-Steering, continuing and branching are for Storyteller's own books only, and that is guarded three times. The panel and every command but "Write me a story" are registered with `when: "generated"`, so beside a book by a person there is no panel and the keys do nothing. The functions refuse any other book, for whoever calls them another way. And Omabook itself refuses to let a plugin rewrite a book it did not make. A book by a person stays as its author wrote it.
+Steering, continuing, branching and removing are for Storyteller's own books only, and that is guarded three times. The panel and every command but "Write me a story" and the one that puts the shelf entry back are registered with `when: "generated"`, so beside a book by a person there is no panel and the keys do nothing. The functions refuse any other book, for whoever calls them another way. And Omabook itself refuses to let a plugin rewrite a book it did not make. A book by a person stays as its author wrote it.
 
 ## Skills
 
@@ -276,6 +312,7 @@ Every request goes to the AI you set up in Omabook, on your subscription or key.
 | A question to the author | 1 | 2,000 to 5,000 tokens (12,000 with spoilers) | 200 tokens |
 | A branch: the plan revised, then a chapter | 4 | 30,000 tokens | 8,500 tokens |
 | A sequel: its plan, then a chapter | 4 | 22,000 tokens | 6,500 tokens |
+| A new story in the world of another: its plan, then a chapter | 4 | about as a sequel (not measured) | about as a sequel |
 | A draft that used a taken name | +1 or +2 | 400 tokens each | 100 tokens each |
 | An answer that could not be used | +1 | the same request again | |
 
@@ -310,8 +347,8 @@ omabook plugin run storyteller settings '[{"chapter_words": 800, "write_ahead": 
 
 | Setting | Default | |
 |---|---|---|
-| `chapter_words` | 1200 | About how long a chapter is. The biggest lever on cost. |
-| `chapters` | 12 | How many chapters a new story is planned to take. Steering may change it. |
+| `chapter_words` | 1200 | About how long a chapter is. The biggest lever on cost. The form on the shelf starts at this, and a story keeps what was chosen for it. |
+| `chapters` | 12 | How many chapters a new story is planned to take. Steering may change it. Also where the form starts. |
 | `write_ahead` | true | Write the next chapter by itself as you near the end of what there is. |
 | `write_at` | 0.35 | How far into the last chapter (0 to 1) you must be before the next is started. |
 | `model_writing` | main | The model for what you read and what the story is built on: the world, the cast, the plot, revised plans, the chapters, the author's answers. `main` is the model chosen in Omabook's settings. |
@@ -324,6 +361,7 @@ omabook plugin run storyteller settings '[{"chapter_words": 800, "write_ahead": 
 | `pen_name` | Storyteller | The author on the cover. |
 | `forbidden_names`, `allowed_names` | none | Your own additions to the originality check. |
 | `stale_seconds` | 30 | How long unfinished work may show no sign of life before it counts as interrupted. |
+| `shelf_entry` | true | Whether "Write a new story" is on the shelf. Removing it from the shelf sets this to false. |
 
 They are kept in `data/settings.json`, which can be edited by hand.
 
@@ -347,7 +385,7 @@ lib/taste.js          what the reader likes, as abstractions with the names take
 lib/world.js          the two graphs: laying a world in, reading it back as text, revealing, copying, cutting back
 lib/jobs.js           work in progress on disk, so it survives a crash
 lib/status.js         what the panel and the line at the bottom of the window say
-lib/writer.js         the writing: a new story, a chapter, a branch, a sequel, as stages
+lib/writer.js         the writing: a new story, a chapter, a branch, a sequel, a story in another's world, as stages
 lib/reading.js        page turns (when to write, what to reveal), steering, asking the author
 skills/               the built-in skills, each <name>/SKILL.md with its evals/
 docs/craft.md         how stories work and what is known about long fiction from models, with sources

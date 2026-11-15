@@ -24,7 +24,7 @@ pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
 pkg_check_modules(POPPLER_QT6 REQUIRED IMPORTED_TARGET poppler-qt6)
 add_executable(window_harness harness.cpp ${OMABOOK_SOURCE}/src/resources.qrc)
 target_include_directories(window_harness PRIVATE ${OMABOOK_SOURCE}/src)
-target_compile_definitions(window_harness PRIVATE OMABOOK_VERSION="0.1.0")
+target_compile_definitions(window_harness PRIVATE OMABOOK_VERSION="0.1.4")
 target_link_libraries(window_harness PRIVATE ${OMABOOK_BUILD}/libomabook_core.a
   Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Sql Qt6::Concurrent Qt6::Test
   PkgConfig::LIBARCHIVE PkgConfig::POPPLER_QT6)

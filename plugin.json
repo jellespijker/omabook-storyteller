@@ -1,9 +1,9 @@
 {
     "name": "Storyteller",
-    "version": "1.1",
+    "version": "1.2",
     "author": "",
-    "description": "Writes an original book for you, chapter by chapter, as you read it. You can steer it, ask the author, and branch it.",
-    "omabook": "0.1.0",
+    "description": "Writes an original book for you, chapter by chapter, as you read it. Start one from the shelf; steer it, ask the author, branch it.",
+    "omabook": "0.1.4",
     "script": "main.js",
     "permissions": [
         "files",
