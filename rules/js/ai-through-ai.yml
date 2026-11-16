@@ -1,0 +1,15 @@
+id: ai-through-ai
+language: javascript
+severity: error
+message: The model is asked only through Ai (lib/ai.js), which checks every answer; call Ai, not omabook.ai.
+note: Asking whether a model is set up (omabook.ai.available()) is fine anywhere.
+ignores:
+  - lib/ai.js
+rule:
+  pattern: omabook.ai.$METHOD($$$ARGS)
+  not:
+    has:
+      field: function
+      has:
+        field: property
+        regex: ^available$

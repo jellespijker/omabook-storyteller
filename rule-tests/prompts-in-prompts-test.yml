@@ -1,0 +1,5 @@
+id: prompts-in-prompts
+valid:
+  - 'var t = Prompts.chapter(plan);'
+invalid:
+  - 'var t = "Task: write chapter one";'

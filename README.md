@@ -482,6 +482,19 @@ The window has a test of its own, `tests/window/`: a small program that links Om
 - The originality check catches names, not ideas. See above.
 - A chapter being written can't be stopped; a wish that arrives meanwhile shapes the one after.
 
+## Development
+
+Storyteller is developed in the [omabook-workspace](https://github.com/jellespijker/omabook-workspace),
+the main workspace for Omabook and its plugins. It holds the shared Kanban board, the labels
+and the milestones; see its README and `AGENTS.md`.
+
+Every change is checked by the harness in `.agents/`: the script language's rules and the
+plugin's design (ast-grep), the parts' include order, ruff, file-size and complexity budgets,
+the skills, secrets and an issue number in each commit. Set it up once with
+`uvx pre-commit install`; run it on a branch with `bin/check`. The rules are in
+`.agents/rules/`, and what changed between releases in [CHANGELOG.md](CHANGELOG.md).
+None of it is part of an installed plugin.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

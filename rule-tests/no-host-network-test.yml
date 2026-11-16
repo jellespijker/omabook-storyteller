@@ -1,0 +1,6 @@
+id: no-host-network
+valid:
+  - 'omabook.http.get("https://example.org");'
+invalid:
+  - 'fetch("https://example.org");'
+  - "var x = new XMLHttpRequest();"

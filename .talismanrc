@@ -1,0 +1,10 @@
+# Talisman (secret scanning on commit). Findings of low severity (the word
+# "secret" in prose) are shown but don't block; anything that looks like a key
+# or a token does.
+#
+# Files listed below were reviewed and hold no secret; a checksum pins each to
+# the content that was reviewed, so a later change is scanned again. Add an
+# entry only after looking at the file (`talisman --checksum <file>`).
+threshold: medium
+fileignoreconfig: []
+version: "1.0"

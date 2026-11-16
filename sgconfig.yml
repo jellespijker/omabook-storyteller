@@ -1,0 +1,7 @@
+# ast-grep: the plugin's structural rules, for what its script language and
+# its design forbid. Each rule has cases in rule-tests/ (`ast-grep test`).
+# The harness applies them to the lines a change adds; see .agents/rules/.
+ruleDirs:
+  - rules/js
+testConfigs:
+  - testDir: rule-tests

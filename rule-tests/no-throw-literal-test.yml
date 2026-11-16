@@ -1,0 +1,7 @@
+id: no-throw-literal
+valid:
+  - 'throw new Error("Open one of Storyteller''s stories first.");'
+  - "try { f(); } catch (e) { throw e; }"
+invalid:
+  - 'throw "There is no book " + id;'
+  - 'throw "no story";'

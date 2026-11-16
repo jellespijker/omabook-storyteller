@@ -1,0 +1,7 @@
+# ruff, for the tests and the harness. The harness checks the lines a change
+# adds (lint) and new files whole (format); `uvx ruff check` shows everything.
+line-length = 140
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "B", "UP", "SIM", "I"]

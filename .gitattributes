@@ -1,3 +1,17 @@
 tests/ export-ignore
 .gitignore export-ignore
 .gitattributes export-ignore
+# The harness is for developing the plugin, not part of an installed one.
+.agents/ export-ignore
+.claude/ export-ignore
+.github/ export-ignore
+rules/ export-ignore
+rule-tests/ export-ignore
+sgconfig.yml export-ignore
+ruff.toml export-ignore
+.pre-commit-config.yaml export-ignore
+.talismanrc export-ignore
+AGENTS.md export-ignore
+CLAUDE.md export-ignore
+bin/ export-ignore
+CHANGELOG.md export-ignore

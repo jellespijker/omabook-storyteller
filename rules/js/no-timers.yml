@@ -1,0 +1,9 @@
+id: no-timers
+language: javascript
+severity: error
+message: There are no timers in a script plugin; use omabook.after, which the plugin's call budget accounts for.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: ^(setTimeout|setInterval|setImmediate|requestAnimationFrame)$

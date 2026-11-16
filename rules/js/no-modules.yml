@@ -1,0 +1,9 @@
+id: no-modules
+language: javascript
+severity: error
+message: A script plugin has no modules; include the file from main.js with omabook.include, and use the global it makes.
+rule:
+  any:
+    - kind: import_statement
+    - kind: export_statement
+    - pattern: require($$$ARGS)

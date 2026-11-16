@@ -1,0 +1,9 @@
+id: no-eval
+language: javascript
+severity: error
+message: eval and new Function run text as code; a plugin never does, least of all with what a model wrote.
+rule:
+  any:
+    - pattern: eval($$$ARGS)
+    - pattern: new Function($$$ARGS)
+    - pattern: Function($$$ARGS)

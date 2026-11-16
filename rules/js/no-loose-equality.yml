@@ -1,0 +1,9 @@
+id: no-loose-equality
+language: javascript
+severity: error
+message: == and != convert their operands first; use === and !==.
+rule:
+  kind: binary_expression
+  has:
+    field: operator
+    regex: ^(==|!=)$

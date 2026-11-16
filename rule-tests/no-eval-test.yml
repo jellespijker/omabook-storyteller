@@ -1,0 +1,6 @@
+id: no-eval
+valid:
+  - "var data = JSON.parse(text);"
+invalid:
+  - "eval(text);"
+  - "var f = new Function('a', 'return a');"

@@ -1,0 +1,7 @@
+id: no-async-await
+valid:
+  - "function write() { return Ai.prose('x').then(function (t) { return t; }); }"
+invalid:
+  - "async function write() { return 1; }"
+  - "var f = async () => 1;"
+  - "function f() { return await g(); }"

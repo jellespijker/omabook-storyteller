@@ -1,0 +1,96 @@
+# The harness, run by git: `uvx pre-commit install` once per clone (it installs
+# the pre-commit, commit-msg and pre-push hooks). CI runs the same checks
+# (.github/workflows/harness.yml). What each check is for: .agents/rules/.
+#
+# The project's own checks look only at what a commit adds (they compare the
+# index with HEAD), so old code that predates a rule never blocks a commit.
+# Never skip them with --no-verify; fix what they say, or say in the code why not.
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+
+  - repo: https://github.com/thoughtworks/talisman
+    rev: v1.37.0
+    hooks:
+      - id: talisman-commit
+
+  - repo: local
+    hooks:
+      - id: commit-names-an-issue
+        name: Commit message names a GitHub issue
+        entry: python3 .agents/hooks/check_commit_msg.py
+        language: system
+        stages: [commit-msg]
+
+      - id: ast-grep
+        name: Structural rules of the plugin (rules/js, new lines)
+        entry: python3 .agents/hooks/check_ast_grep.py --staged
+        language: system
+        pass_filenames: false
+        types_or: [javascript]
+
+      - id: ast-grep-rule-tests
+        name: The structural rules' own cases (rule-tests)
+        entry: bash -c 'if command -v ast-grep >/dev/null; then ast-grep test --skip-snapshot-tests; else uvx --from ast-grep-cli==0.51.1 ast-grep test --skip-snapshot-tests; fi'
+        language: system
+        pass_filenames: false
+        files: ^(sgconfig\.yml|rules/|rule-tests/)
+
+      - id: layers
+        name: Parts in include order (main.js, lib/)
+        entry: python3 .agents/hooks/check_layers.py --staged
+        language: system
+        pass_filenames: false
+        files: ^(main\.js|lib/)
+
+      - id: ruff
+        name: ruff (new lines; new files formatted)
+        entry: python3 .agents/hooks/check_python.py --staged
+        language: system
+        pass_filenames: false
+        types_or: [python]
+
+      - id: file-size
+        name: File-size budget and ratchet
+        entry: python3 .agents/hooks/check_file_size.py --staged
+        language: system
+        pass_filenames: false
+
+      - id: complexity
+        name: Function complexity budget (lizard)
+        entry: python3 .agents/hooks/check_complexity.py --staged
+        language: system
+        pass_filenames: false
+        types_or: [javascript, python]
+
+      - id: skills
+        name: Every skill loads, and the unsafe ones are refused (tests/evals.py)
+        entry: python3 tests/evals.py
+        language: system
+        pass_filenames: false
+        files: ^(skills/|tests/refused/|tests/evals\.py|lib/skills\.js|lib/originality\.js)
+
+      - id: harness-tests
+        name: The harness's own tests
+        entry: python3 .agents/hooks/test_hooks.py
+        language: system
+        pass_filenames: false
+        files: ^(\.agents/|rules/|sgconfig\.yml|ruff\.toml)
+
+      - id: plugin-tests
+        name: The life of a story (tests/run.py; needs omabook)
+        entry: python3 tests/run.py
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

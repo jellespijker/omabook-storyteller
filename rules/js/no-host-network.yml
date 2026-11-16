@@ -1,0 +1,9 @@
+id: no-host-network
+language: javascript
+severity: error
+message: A plugin reaches the network only through omabook.http, which the user's permissions cover.
+rule:
+  any:
+    - pattern: fetch($$$ARGS)
+    - pattern: new XMLHttpRequest($$$ARGS)
+    - pattern: new WebSocket($$$ARGS)

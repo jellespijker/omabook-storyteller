@@ -1,0 +1,14 @@
+{
+  "comment": "Files over budget when the check came in, at their size then. They may shrink, never grow; a file that shrinks lowers its own ceiling and leaves the list once within budget. Never add an entry by hand.",
+  "budgets": {
+    "*": 500
+  },
+  "files": {
+    "lib/prompts.js": 645,
+    "lib/skills.js": 569,
+    "lib/world.js": 546,
+    "lib/writer.js": 606,
+    "main.js": 742,
+    "tests/run.py": 741
+  }
+}

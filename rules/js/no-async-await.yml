@@ -1,0 +1,11 @@
+id: no-async-await
+language: javascript
+severity: error
+message: Omabook's script engine has no async/await; chain promises with .then.
+note: See main.js, "The rules of the house", and `omabook plugin api`.
+rule:
+  any:
+    - kind: await_expression
+    - pattern: async function $NAME($$$ARGS) { $$$BODY }
+    - pattern: async ($$$ARGS) => $BODY
+    - pattern: async function ($$$ARGS) { $$$BODY }

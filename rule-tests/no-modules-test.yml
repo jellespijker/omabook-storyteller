@@ -1,0 +1,7 @@
+id: no-modules
+valid:
+  - 'omabook.include("lib/util.js");'
+invalid:
+  - 'import { Util } from "./lib/util.js";'
+  - "export function f() {}"
+  - 'var u = require("./lib/util.js");'

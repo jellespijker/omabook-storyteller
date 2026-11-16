@@ -1,0 +1,10 @@
+id: prompts-in-prompts
+language: javascript
+severity: warning
+message: Words sent to the model belong in Prompts (lib/prompts.js), so every prompt can be read in one place.
+note: A string that starts with "Task:" or "You are" outside lib/prompts.js is most likely a prompt.
+ignores:
+  - lib/prompts.js
+rule:
+  kind: string
+  regex: ^["'](Task:|You are\b)

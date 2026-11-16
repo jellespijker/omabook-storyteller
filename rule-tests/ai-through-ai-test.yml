@@ -1,0 +1,6 @@
+id: ai-through-ai
+valid:
+  - "if (!omabook.ai.available()) return;"
+  - 'Ai.prose("chapter", task);'
+invalid:
+  - 'omabook.ai.ask("Write a chapter");'

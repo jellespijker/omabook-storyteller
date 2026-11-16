@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+
+# The whole harness on everything this branch changes, as CI runs it: what the
+# working tree adds compared with the merge base (main by default), and every
+# commit message since. The plugin's own tests are separate: tests/run.py.
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+base="${1:-$(git rev-parse --verify -q origin/main >/dev/null && echo origin/main || echo main)}"
+
+status=0
+for check in ast_grep layers python file_size complexity; do
+  python3 .agents/hooks/check_$check.py --base "$base" || status=1
+done
+python3 tests/evals.py >/dev/null || { echo "tests/evals.py failed: run it to see why" >&2; status=1; }
+python3 .agents/hooks/check_commit_msg.py --range "$(git merge-base "$base" HEAD)..HEAD" || status=1
+if [[ $status -eq 0 ]]; then
+  echo "bin/check: the change passes the harness (against $base)."
+fi
+exit $status

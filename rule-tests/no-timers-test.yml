@@ -1,0 +1,5 @@
+id: no-timers
+valid:
+  - "omabook.after(1000, retry);"
+invalid:
+  - "setTimeout(retry, 1000);"

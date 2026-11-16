@@ -1,0 +1,57 @@
+name: Harness
+
+# The checks the hooks run locally (.agents/rules/00-harness.md), on everything
+# a pull request or a push changes, so a commit made without the hooks is
+# still checked. Only what the change adds is judged.
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    name: Harness checks
+    runs-on: ubuntu-latest
+    # Arch, to install Omabook's own package: the skills' checks run in it.
+    container: archlinux:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install git for the checkout
+        run: pacman -Syu --noconfirm --needed git
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install the harness's tools, and the newest Omabook
+        run: |
+          pacman -S --noconfirm --needed python uv ast-grep curl jq
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          url=$(curl -fsSL https://api.github.com/repos/jellespijker/omabook/releases/latest \
+            | jq -r '.assets[] | select(.name | endswith("-x86_64.pkg.tar.zst")) | .browser_download_url')
+          curl -fsSLo "$RUNNER_TEMP/omabook.pkg.tar.zst" "$url"
+          pacman -U --noconfirm "$RUNNER_TEMP/omabook.pkg.tar.zst"
+
+      - name: Choose what to compare with
+        id: base
+        run: |
+          if [[ "${{ github.event_name }}" == pull_request ]]; then
+            echo "ref=origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.before }}" =~ ^0+$ ]]; then
+            echo "ref=HEAD~1" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: The harness's own tests
+        run: |
+          python3 .agents/hooks/test_hooks.py
+          ast-grep test --skip-snapshot-tests
+
+      - name: Check the change
+        run: bin/check "${{ steps.base.outputs.ref }}"

@@ -5,3 +5,6 @@ data/
 __pycache__/
 *.pyc
 *.error
+# Each person's own Claude Code settings stay local; the harness's are shared.
+/.claude/*
+!/.claude/settings.json
