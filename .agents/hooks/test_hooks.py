@@ -8,6 +8,7 @@ the checks see a real diff. Run: python3 .agents/hooks/test_hooks.py
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -15,9 +16,20 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
 HARNESS = [".agents", "rules", "rule-tests", "sgconfig.yml", "ruff.toml"]
+
+
+def isolated() -> dict[str, str]:
+    """This process's environment without git's own variables.
+
+    Run as a hook, these tests inherit GIT_DIR, GIT_INDEX_FILE and the rest from
+    the commit being made, and every git command would work on that repository
+    instead of the scratch one: commit into it, write its config, re-init it.
+    """
+    return {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
 
 
 class Scratch:
@@ -39,7 +51,7 @@ class Scratch:
         self.commit()
 
     def git(self, *args: str) -> None:
-        subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True, env=isolated())
 
     def write(self, path: str, text: str) -> None:
         target = self.root / path
@@ -57,6 +69,7 @@ class Scratch:
             input=stdin,
             capture_output=True,
             text=True,
+            env=isolated(),
         )
 
     def close(self) -> None:
@@ -76,6 +89,22 @@ class HarnessTest(unittest.TestCase):
 
     def assertQuiet(self, result: subprocess.CompletedProcess) -> None:
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class Isolation(unittest.TestCase):
+    def test_a_hooks_git_variables_leave_that_repository_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as other:
+            subprocess.run(["git", "init", "-q", other], check=True, env=isolated())
+            config = (Path(other) / ".git/config").read_text(encoding="utf-8")
+            hook = {"GIT_DIR": f"{other}/.git", "GIT_INDEX_FILE": f"{other}/.git/index", "GIT_WORK_TREE": other}
+            with mock.patch.dict(os.environ, hook):
+                repo = Scratch()
+                repo.write("lib/a.js" if (REPO / "main.js").exists() else "src/a.cpp", "x\n")
+                repo.commit()
+                repo.close()
+            self.assertEqual((Path(other) / ".git/config").read_text(encoding="utf-8"), config)
+            log = subprocess.run(["git", "-C", other, "log", "--oneline"], capture_output=True, text=True, env=isolated())
+            self.assertEqual(log.stdout, "", "a commit went into the repository the hook ran for")
 
 
 class PretoolGuard(HarnessTest):
