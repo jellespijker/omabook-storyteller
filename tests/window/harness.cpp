@@ -5,9 +5,9 @@
 // tests/ui_tests.cpp), which is why it links Omabook's code; see
 // CMakeLists.txt beside this file for how to build and run it.
 //
-// It starts a story from its key, types in the panel's steer field (which
-// must not set off the reader's single-key shortcuts), pages on until the
-// next chapter arrives (the reader must keep its place), opens the graph
+// It starts a story from its key (the form Omabook draws for the plugin),
+// types in the panel's steer field (which must not set off the reader's
+// single-key shortcuts), pages on until the next chapter arrives (the reader must keep its place), opens the graph
 // view, asks the author, branches, opens a book by a person (no panel, no
 // story commands), and ends by requiring that QML warned of nothing.
 // STORYTELLER is the plugin's folder; SHOTS a folder for screenshots.
@@ -109,6 +109,8 @@ struct Desk {
         aiAgent.emplace(&*settings, dir.filePath("omarchy/defaults/agent"));
         librarian.emplace(&*backend, &*settings, &*custom, [this] { return look->colors(); });
         settings->setTour("done");
+        // Finding plugins asks only the registry built in: nothing here reaches GitHub.
+        settings->setPluginDiscovery(false);
         settings->setNewsSeen(OMABOOK_VERSION);
         manual.emplace(&*settings, &*custom);
         const auto followPlugins = [this] { custom->setPlugins(backend->scripts()->commands(), backend->scripts()->panels()); };
@@ -235,19 +237,21 @@ private slots:
         QTest::qWait(300);
         desk.shot("01-library-empty");
 
-        // --- Write me a story, by its key, answered in Omabook's own dialog.
+        // --- Write me a story, by its key: the form "Write a new story" on
+        //     the shelf opens too, drawn by Omabook (omabook.ui.form).
         desk.key(Qt::Key_W, Qt::ControlModifier | Qt::ShiftModifier);
-        QTRY_VERIFY2(desk.value("pluginAsk", "opened").toBool(), "Ctrl+Shift+W did not ask what the reader is in the mood for");
-        QCOMPARE(desk.value("pluginAskTitle", "text").toString(), QString("What are you in the mood for?"));
-        desk.shot("02-mood");
+        QTRY_VERIFY2(desk.value("pluginForm", "opened").toBool(), "Ctrl+Shift+W did not open the form for a new story");
+        QCOMPARE(desk.value("pluginFormTitle", "text").toString(), QString("Write a new story"));
+        QTRY_VERIFY2(desk.value("pluginFormText_wish", "activeFocus").toBool(), "the wish did not take the keyboard");
         desk.type("a quiet mystery");
-        desk.key(Qt::Key_Return);
-        // Then which skills: a second question in the same dialog.
-        QTRY_COMPARE(desk.value("pluginAskTitle", "text").toString(), QString("Any skills to write it with?"));
-        desk.type("spare, chapter hooks");
+        desk.shot("02-mood");
+        // The skills to write it with: two of the list, ticked.
+        QVERIFY(desk.click("pluginFormTick_skills_spare-concrete"));
+        QVERIFY(desk.click("pluginFormTick_skills_chapter-hooks"));
         desk.shot("02b-skills");
-        desk.key(Qt::Key_Return);
-        QTRY_VERIFY(!desk.value("pluginAsk", "visible").toBool());
+        QTRY_VERIFY(desk.value("pluginFormDone", "enabled").toBool());
+        QVERIFY(desk.click("pluginFormDone"));
+        QTRY_VERIFY(!desk.value("pluginForm", "visible").toBool());
         QTRY_VERIFY_WITH_TIMEOUT(desk.stories().size() == 1, 30000);
         QTRY_VERIFY_WITH_TIMEOUT(desk.reader->isOpen(), 10000);
         const qint64 book = desk.stories().first().id;
@@ -280,15 +284,16 @@ private slots:
         desk.shot("05-steered-chapter-two");
 
         // --- Reading on: page turns until the next chapter is written.
-        // Space and PageDown turn pages; Right goes to the next chapter.
+        // Space and Right turn pages, on into the next chapter; PgDown goes to
+        // the next chapter at once.
         int turns = 0;
         while (desk.reader->section() < 1 && turns++ < 60) {
-            desk.key(Qt::Key_PageDown);
+            desk.key(Qt::Key_Space);
             QTest::qWait(350);
         }
         QCOMPARE(desk.reader->section(), 1);
         for (int more = 0; more < 8 && desk.reader->fraction() < 0.4; ++more) {
-            desk.key(Qt::Key_PageDown);
+            desk.key(Qt::Key_Space);
             QTest::qWait(350);
             ++turns;
         }

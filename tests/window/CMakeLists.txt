@@ -1,7 +1,8 @@
 # The plugin in Omabook's real window, offscreen: see harness.cpp.
 #
 # It links Omabook's own code, so it needs Omabook's source tree and a build
-# of it (for libomabook_core.a):
+# of it (for libomabook_core.a, which `cmake --build <build> --target
+# omabook_core` makes), of the same commit; the version is read from there:
 #
 #   cmake -S tests/window -B /tmp/storyteller-window \
 #         -DOMABOOK_SOURCE=/path/to/omabook -DOMABOOK_BUILD=/path/to/omabook/build
@@ -22,9 +23,19 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2 D
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
 pkg_check_modules(POPPLER_QT6 REQUIRED IMPORTED_TARGET poppler-qt6)
-add_executable(window_harness harness.cpp ${OMABOOK_SOURCE}/src/resources.qrc)
+pkg_check_modules(LIBSODIUM REQUIRED IMPORTED_TARGET libsodium)
+# The theme palettes are compiled in, as in Omabook's own tests.
+add_executable(window_harness harness.cpp ${OMABOOK_SOURCE}/src/resources.qrc ${OMABOOK_SOURCE}/share/omabook/themes/themes.qrc)
 target_include_directories(window_harness PRIVATE ${OMABOOK_SOURCE}/src)
-target_compile_definitions(window_harness PRIVATE OMABOOK_VERSION="0.1.4")
+# The version of the Omabook it is built against, read from that Omabook's
+# CMakeLists.txt as its own build does, so it never names a release it isn't.
+file(STRINGS "${OMABOOK_SOURCE}/CMakeLists.txt" omabook_project REGEX "^project\\(omabook VERSION [0-9.]+")
+string(REGEX MATCH "[0-9][0-9.]*" omabook_version "${omabook_project}")
+if(NOT omabook_version)
+  message(FATAL_ERROR "No version in ${OMABOOK_SOURCE}/CMakeLists.txt's project(omabook VERSION ...).")
+endif()
+message(STATUS "Building against Omabook ${omabook_version}")
+target_compile_definitions(window_harness PRIVATE OMABOOK_VERSION="${omabook_version}")
 target_link_libraries(window_harness PRIVATE ${OMABOOK_BUILD}/libomabook_core.a
   Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Sql Qt6::Concurrent Qt6::Test
-  PkgConfig::LIBARCHIVE PkgConfig::POPPLER_QT6)
+  PkgConfig::LIBARCHIVE PkgConfig::POPPLER_QT6 PkgConfig::LIBSODIUM)
