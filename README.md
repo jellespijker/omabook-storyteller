@@ -71,6 +71,22 @@ Remove the book with Omabook's own Remove instead, and Storyteller asks once whe
 
 From the command line: `removalPlan <book>` says what would go, and `removeStory <book or story id> {"world": "keep" | "all"}` removes it.
 
+### Sharing a story's world
+
+A story can go in a collection you publish (Omabook's **Shift+P**, `omabook collections share`) or keep together with others in a shared space (`omabook spaces create`). What goes of it:
+
+- **Its world**, with the collection's graph: only what you have been shown of it (the reader's graph, `world:<id>`), never the plan with its secrets and the plot still to come. Each thing in it is marked as met in the story's book at the chapter that showed it, so whoever gets it sees only as much as they have read of the story themselves, as with any graph Omabook shares.
+- **The story itself, as a file**, only when you say so for that story: it is your own writing, and whoever gets it can read all of it. Without it, they have the book's details, and nothing of its world opens for them.
+- **Never anything of a book by a person.** Only Storyteller's own stories bring a world; the originality rule means none of them holds anything of anyone else's book.
+
+**Storyteller: what goes when this story is shared** (in the reader) sets both for a story: its world goes unless you keep it at home, its file only if you switch it on.
+
+Someone you share it with sees the world beside their own graph, read-only. In a shared space where they are a writer, **Storyteller: write in a world shared with you** starts a new story in it, as far as they have read: the same rule as a new story in the world of one of your own, with a copy of the world of its own and a plot of its own. That story goes into the space with its world (signed and checked for their role by Omabook), so the others can read it, and write on in its world in turn. Nobody writes in anyone else's world.
+
+This needs an Omabook that carries plugins' worlds (0.1.7, `omabook.graph.layers` in `omabook plugin api`). An older one shares the story's details and keeps its world and file at home.
+
+From the command line: `sharedWorlds [<book>, ...] ["graph"]` says what a collection of those books would take and what it leaves, and why; `storySharing <book> {"world": true, "file": false}` sets what goes of a story; `worldsSharedHere` lists the worlds shared with you, and `writeInSharedWorld <layer scope> "<wish>"` starts a story in one.
+
 ### Keys
 
 | Where | Key | What |
@@ -386,10 +402,14 @@ lib/world.js          the two graphs: laying a world in, reading it back as text
 lib/jobs.js           work in progress on disk, so it survives a crash
 lib/status.js         what the panel and the line at the bottom of the window say
 lib/writer.js         the writing: a new story, a chapter, a branch, a sequel, a story in another's world, as stages
+lib/sharing.js        a story's world in a published or shared collection; writing in a world shared with you
 lib/reading.js        page turns (when to write, what to reveal), steering, asking the author
+lib/removal.js        removing a story, its world, and asking about the stories that share it
 skills/               the built-in skills, each <name>/SKILL.md with its evals/
 docs/craft.md         how stories work and what is known about long fiction from models, with sources
 tests/run.py          the tests: the whole life of a story, driven from the command line
+tests/sharing.py      its steps for a world in a published or shared collection, with a friend on a second bench
+tests/bench.py        the scratch home, library and plugin folder the tests drive Omabook on
 tests/evals.py        the skills' evals: checks with the stand-in model; --quality on the real AI
 tests/refused/        skills that must be refused, one for each reason
 tests/stub_ai.py      a stand-in for the model that answers canned text
@@ -443,7 +463,7 @@ python3 tests/run.py            # needs omabook on the PATH, or OMABOOK=/path/to
 python3 tests/run.py --keep     # leave the scratch folder to look at
 ```
 
-The tests need no window and no model. They make a scratch home, a scratch library with one ordinary book and a little graph, copy the plugin into a scratch plugin folder, set Omabook's AI to the command `tests/stub_ai.py`, and then drive `omabook plugin run` through the whole life of a story (36 steps): skills loaded, refused for imitation, for speaking over the rules, for injected markers and for taken names, added, switched off and removed, and installed from a GitHub repository, folder and file (served by the test itself); a story started with two skills, which reach the requests of their stages and no others; a world built in its own scope, a collision with a library name rejected and renamed, chapter one read over and mended by edits (one that can't be placed is left out), costs kept by task, continuity kept in the plan graph and handed on, page turns that do and do not write chapter two, steering (with "write it lusher" choosing a skill, which puts out the one it excludes), the panel adding and removing skills, asking the author with and without spoilers, a chapter interrupted and picked up (in the update and in the editor's pass, neither paid for twice), the end, a sequel and a branch written with their parent's skills, a branch with copied graphs and lineage, the refusals for a book by a person, answers that are no good, and a lost working copy restored.
+The tests need no window and no model. They make a scratch home, a scratch library with one ordinary book and a little graph, copy the plugin into a scratch plugin folder, set Omabook's AI to the command `tests/stub_ai.py`, and then drive `omabook plugin run` through the whole life of a story (51 steps): skills loaded, refused for imitation, for speaking over the rules, for injected markers and for taken names, added, switched off and removed, and installed from a GitHub repository, folder and file (served by the test itself); a story started with two skills, which reach the requests of their stages and no others; a world built in its own scope, a collision with a library name rejected and renamed, chapter one read over and mended by edits (one that can't be placed is left out), costs kept by task, continuity kept in the plan graph and handed on, page turns that do and do not write chapter two, steering (with "write it lusher" choosing a skill, which puts out the one it excludes), the panel adding and removing skills, asking the author with and without spoilers, a chapter interrupted and picked up (in the update and in the editor's pass, neither paid for twice), the end, a sequel and a branch written with their parent's skills, a branch with copied graphs and lineage, the refusals for a book by a person, answers that are no good, and a lost working copy restored; and a story in a shared collection (`tests/sharing.py`): what a collection takes of it and what it leaves, its file only when chosen, each thing of its world marked where it was met, a published snapshot with nothing of the plan or the chapters in it, and a friend on a second scratch home who subscribes to it and joins a shared space of it through a folder (and, with an Omabook that carries worlds, gets the world cut at their place and writes a story in it).
 
 The skills have evals of their own, in the layout of Anthropic's [skill-creator](https://github.com/anthropics/skills): each skill's `evals/` holds cases (a brief, what a good result looks like, statements to judge it by, and for some a count to compare). `python3 tests/evals.py` checks, with the stand-in model, that every skill loads, is valid Agent Skills front matter, has well-formed cases, and that every skill in `tests/refused/` is refused for its reason. `python3 tests/evals.py --quality` runs every case on the real AI twice, with the skill and without it, has each result graded against the statements and counted, and writes skill-creator's workspace layout (`--skill-creator <its folder>` runs its benchmark over it). That costs: 36 drafts and 36 gradings, about 40 minutes with Claude Code. See [What the evals found](#what-the-evals-found).
 
@@ -481,6 +501,7 @@ The window has a test of its own, `tests/window/`: a small program that links Om
 - The plan of a story is in its `.story` file as plain JSON. Omabook never shows it, but an editor would.
 - The originality check catches names, not ideas. See above.
 - A chapter being written can't be stopped; a wish that arrives meanwhile shapes the one after.
+- A story's world travels only with an Omabook that carries plugins' worlds (0.1.7). A story file someone shared with you is read and kept like your own; don't share it on as yours.
 
 ## Development
 

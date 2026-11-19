@@ -39,13 +39,20 @@ omabook.include("lib/checks.js");       // Checks: what a program can count in a
 omabook.include("lib/jobs.js");         // Jobs: work in progress, kept on disk
 omabook.include("lib/status.js");       // Status: the panel and the line at the bottom
 omabook.include("lib/writer.js");       // Writer: a new story, a chapter, a branch, a sequel
+omabook.include("lib/sharing.js");      // Sharing: a story's world in a published or shared collection
 omabook.include("lib/reading.js");      // Reading: page turns, steering, questions
+omabook.include("lib/removal.js");      // Removal: a story, its world, and the stories that share it
 
 // 2. What the plugin adds to Omabook.
 
 // The format makes a .story file a book like any other: the reader, the
 // contents, search, the command line and the AI companion all read it.
 Stories.register();
+
+// What a collection that is published or shared takes of a story: its
+// world, and its file when the reader chose that (see sharing.js). Only an
+// Omabook that carries plugins' worlds asks.
+Sharing.register();
 
 // The panel beside the page. Its text is plain English: a plugin has no
 // translation catalog, so nothing here follows Omabook's language.
@@ -121,21 +128,21 @@ command("story-shelf", "Storyteller: put Write a new story on the shelf", "libra
 // Removing a story, with its world, its working copy and whatever of it is
 // still being written; asked first, saying what goes. From the shelf (the
 // selected book) and from the reader.
-command("story-remove", "Storyteller: remove this story", "reader", "", "generated", function (context) { return confirmRemoval(context.book); });
-command("story-remove-selected", "Storyteller: remove this story", "library", "", "generated", function (context) { return confirmRemoval(context.book); });
+command("story-remove", "Storyteller: remove this story", "reader", "", "generated", function (context) { return Removal.confirm(context.book); });
+command("story-remove-selected", "Storyteller: remove this story", "library", "", "generated", function (context) { return Removal.confirm(context.book); });
 
 command("story-next", "Storyteller: write the next chapter now", "reader", "Ctrl+Shift+N", "generated", function (context) {
     return nextChapter(context.book);
 });
 
 command("story-steer", "Storyteller: steer the story", "reader", "Ctrl+Shift+S", "generated", function (context) {
-    own(context.book, "steered");
+    Stories.own(context.book, "steered");
     return askReader("Where should the story go?", "Who to follow, what should happen, the tone, the pace…")
         .then(function (wish) { return wish ? steer(context.book, wish) : null; });
 });
 
 command("story-ask", "Storyteller: ask the author", "reader", "Ctrl+Shift+A", "generated", function (context) {
-    own(context.book, "asked about this way");
+    Stories.own(context.book, "asked about this way");
     return askReader("Ask the author", "No spoilers, unless you ask for them in so many words.")
         .then(function (question) { return question ? askAuthor(context.book, question) : null; });
 });
@@ -146,22 +153,34 @@ command("story-ask", "Storyteller: ask the author", "reader", "Ctrl+Shift+A", "g
 // refuses any other book for whoever calls it another way: the command
 // line, another plugin, a future mistake here.
 command("story-branch", "Storyteller: branch the story from here", "reader", "Ctrl+Shift+B", "generated", function (context) {
-    own(context.book, "branched");
+    Stories.own(context.book, "branched");
     return askReader("How should it go differently from here?", "What changes from this chapter on.")
         .then(function (difference) { return difference === null ? null : branch(context.book, difference); });
 });
 
 command("story-skills", "Storyteller: choose the story's skills", "reader", "Ctrl+Shift+K", "generated", function (context) {
-    const mine = own(context.book, "changed");
+    const mine = Stories.own(context.book, "changed");
     return omabook.ui.ask({title: "Which skills should it be written with?", placeholder: "Names, with commas; empty for none. The panel lists them.",
                            text: Util.list(mine.story.skills).map(function (skill) { return skill.id; }).join(", ")})
         .then(function (words) { return words === null ? null : setSkills(context.book, words || []); });
 });
 
 command("story-sequel", "Storyteller: write a sequel in this world", "global", "Ctrl+Shift+E", "generated", function (context) {
-    own(context.book, "followed by a sequel");
+    Stories.own(context.book, "followed by a sequel");
     return askReader("What should the sequel be about?", "Leave empty to let the world decide.")
         .then(function (wish) { return wish === null ? null : sequel(context.book, wish); });
+});
+
+// What goes when the story is in a collection that is published or shared,
+// and a new story in a world someone shared with the reader.
+command("story-sharing", "Storyteller: what goes when this story is shared", "reader", "", "generated", function (context) {
+    return Sharing.ask(Stories.own(context.book, "shared").story);
+});
+
+command("story-shared-world", "Storyteller: write in a world shared with you", "library", "", "always", function () {
+    return Sharing.askWorld().then(function (values) {
+        return values ? writeInSharedWorld(values.scope, values.wish, [], null, values.share !== false) : null;
+    });
 });
 
 // 3. What the reader does. The three reader events carry the same thing:
@@ -176,7 +195,7 @@ omabook.on("book.closed", function () { Status.reading(null); });
 // copy are still kept, so putting the book back from the trash goes on with
 // the story. The reader is asked once whether they should go too; the
 // answer that loses nothing is the one taken when they leave the question.
-omabook.on("book.removed", function (event) { return omabook.wait(afterRemoval(event.book || {})); });
+omabook.on("book.removed", function (event) { return omabook.wait(Removal.afterRemoval(event.book || {})); });
 omabook.on("app.started", function () {
     Status.refresh();
     if (unfinishedStories().length > 0)
@@ -186,29 +205,6 @@ omabook.on("app.started", function () {
 // 4. Top-level functions. Each can be run from the command line:
 //      omabook plugin run storyteller startStory '["a quiet mystery at sea"]'
 //    and the panel calls some of them with backend.scripts.call.
-
-// The story and the book for a book's number, or an Error that says why
-// not. Everything that changes a book goes through here, so nothing in
-// this plugin can touch a book it did not write. (The host refuses too:
-// library.replaceFile and library.remove throw for any other book.)
-function own(bookId, doing) {
-    const book = omabook.library.get(bookId);
-    if (!book)
-        throw new Error(bookId ? "There is no book " + bookId + " in the library." : "Open one of Storyteller's stories first.");
-    if (!Stories.mine(book))
-        throw new Error("\"" + book.title + "\" was not written by Storyteller, so it can't be " + (doing || "changed")
-                        + ". A book stays as its author wrote it; only Storyteller's own stories can be steered, continued or branched.");
-    let story = Stories.ofBook(book);
-    if (!story) {
-        // The master copy is gone (a new computer, a cleared data folder).
-        // Reading the book makes the format put it back; see storyfile.js.
-        omabook.library.toc(book.id);
-        story = Stories.ofBook(book);
-    }
-    if (!story)
-        throw new Error("The story behind \"" + book.title + "\" can't be found.");
-    return {book: book, story: story};
-}
 
 // Jobs other than a chapter of an existing book: a story, branch or sequel
 // that has no book yet, and so nowhere to be noticed but here.
@@ -361,131 +357,31 @@ function startFromForm(values) {
     return branch(parentBook.id, wish, Math.max(1, Math.min(parent.chapters.length, Number(values.chapter) || 1)));
 }
 
-// --- Removing a story -----------------------------------------------------
+// --- Removing a story (removal.js) ----------------------------------------
 
-// Stories removed by this plugin, whose book.removed is its own doing.
-const removing = {};
+// What removing a story takes away, without taking it; and removing it.
+// With {world: "all"}, every story that shares its world goes as well.
+function removalPlan(target) { return Removal.plan(target); }
+function removeStory(target, options) { return Removal.remove(target, options); }
 
-// The story a book's number, or a story's id, is.
-function storyFor(target) {
-    if (typeof target === "string" && Stories.exists(target))
-        return Stories.load(target);
-    return own(Number(target), "removed").story;
-}
+// --- Sharing (sharing.js) --------------------------------------------------
 
-// The other stories that share a world with this one: what it was made
-// from, and what was made from it, all the way along. Each has a world of
-// its own copy, so removing one never breaks another; the reader decides
-// whether the world goes with all of them.
-function family(story) {
-    const all = Stories.all(), byId = {};
-    all.forEach(function (one) { byId[one.id] = one; });
-    const found = {}, queue = [story.id];
-    found[story.id] = true;
-    while (queue.length > 0) {
-        const id = queue.shift(), one = byId[id];
-        const near = all.filter(function (other) { return other.lineage && other.lineage.story === id; }).map(function (other) { return other.id; });
-        if (one && one.lineage && byId[one.lineage.story])
-            near.push(one.lineage.story);
-        near.forEach(function (other) {
-            if (!found[other]) {
-                found[other] = true;
-                queue.push(other);
-            }
-        });
-    }
-    return all.filter(function (one) { return found[one.id] && one.id !== story.id; }).map(function (one) {
-        const book = Stories.bookOf(one);
-        const kind = one.lineage && one.lineage.story === story.id ? one.lineage.kind
-                   : story.lineage && story.lineage.story === one.id ? "parent" : "related";
-        return {story: one.id, title: one.title, book: book ? book.id : 0, relation: kind};
-    });
-}
+// What a collection of these books takes of Storyteller's, with these parts:
+//   omabook plugin run storyteller sharedWorlds '[[12, 14], ["graph"]]'
+// Only the reader's graph of a story it wrote; its file only when chosen.
+function sharedWorlds(books, parts) { return Sharing.plan(books, parts); }
 
-// What removing a story takes away, without taking it.
-function removalPlan(target) {
-    const story = storyFor(target), book = Stories.bookOf(story);
-    return {story: story.id, title: story.title, book: book ? book.id : 0, scopes: [story.world.seen, story.world.plan],
-            files: [Stories.path(story.id)].concat(Jobs.read(story.id) ? ["data/jobs/" + story.id + ".json"] : []),
-            family: family(story)};
-}
+// What goes of one story, after changing what is given: {world, file}.
+function storySharing(bookId, choice) { return Sharing.choose(Stories.own(bookId, "shared").story, choice || {}); }
 
-// Removes a story: its book (to the trash), its two graphs, its working
-// copy and anything of it unfinished. With {world: "all"}, every story that
-// shares its world goes as well; otherwise ("keep", the default) only this
-// one, and the others keep their own copy of the world. Nothing is removed
-// while any of it is being written. A promise of what was removed.
-function removeStory(target, options) {
-    const plan = removalPlan(target), all = options && options.world === "all";
-    const going = [plan.story].concat(all ? plan.family.map(function (one) { return one.story; }) : []);
-    Jobs.all().forEach(function (job) {
-        const state = Jobs.state(job.story);
-        if (state !== "running" && state !== "elsewhere")
-            return;
-        if (going.indexOf(job.story) >= 0)
-            throw new Error("\"" + (Stories.exists(job.story) ? Stories.load(job.story).title : plan.title) + "\" is being written right now; remove it once that is done.");
-        if (job.parent && going.indexOf(job.parent) >= 0)
-            throw new Error("A story is being made from \"" + plan.title + "\" right now; remove it once that is done.");
-    });
-    const removed = going.map(function (id) {
-        const story = Stories.load(id), book = Stories.bookOf(story);
-        removing[id] = true;
-        if (book)
-            omabook.library.remove(book.id);
-        World.drop(story);
-        Jobs.clear(id);
-        omabook.files.remove(Stories.path(id));
-        return {story: id, title: story.title, book: book ? book.id : 0};
-    });
-    const kept = all ? [] : plan.family;
-    Status.refresh();
-    omabook.say(removed.length === 1 ? "\"" + plan.title + "\" is removed, with its world." + (kept.length ? " The stories that share it keep theirs." : "")
-                                     : removed.length + " stories are removed, with the world they shared.");
-    return {removed: removed, kept: kept};
-}
+// The worlds shared with the reader, and a new story in one of them, which
+// goes into the space when it is a shared one they write in (and `share` is
+// not false). `scope` is a layer's, as worldsSharedHere lists them.
+function worldsSharedHere() { return Sharing.layers(); }
 
-function names(stories) {
-    return stories.map(function (one) { return "\"" + one.title + "\""; }).join(", ");
-}
-
-// Asks before removing, saying what goes; a world shared with other
-// stories is kept for them unless the reader says otherwise.
-function confirmRemoval(bookId) {
-    const plan = removalPlan(bookId), fields = [];
-    if (plan.family.length > 0)
-        fields.push({id: "world", type: "choice", label: "Its world is shared with " + names(plan.family), value: "keep", choices: [
-            {value: "keep", label: "Remove only this story", help: "The others keep their own copy of the world and go on as they are."},
-            {value: "all", label: "Remove the world with every story in it", help: "Also goes, with its book: " + names(plan.family) + "."}]});
-    return omabook.ui.form({
-        title: "Remove \"" + plan.title + "\"?", accept: "Remove", fields: fields,
-        intro: "The book goes to the trash, and its world goes for good: the two graphs Storyteller keeps of it (what you know, and the author's plan), its working copy, and anything of it still unfinished. No other book is touched."
-    }).then(function (values) { return values ? removeStory(bookId, {world: values.world || "keep"}) : null; });
-}
-
-// After Omabook's own Remove took a story's book.
-function afterRemoval(book) {
-    const id = (book.identifiers || {}).storyteller;
-    if (!Stories.mine(book) || !id)
-        return null;
-    if (removing[id] || !Stories.exists(id)) {
-        delete removing[id];
-        return null;
-    }
-    const story = Stories.load(id), related = family(story);
-    const choices = [{value: "keep", label: "Keep them", help: "Put the book back from the trash, and the story goes on where it was."},
-                     {value: "story", label: "Remove its world and working copy too",
-                      help: related.length ? "The stories that share the world (" + names(related) + ") keep their own copy." : "They go for good."}];
-    if (related.length > 0)
-        choices.push({value: "all", label: "Remove the world with every story in it", help: "Also goes, with its book: " + names(related) + "."});
-    return omabook.ui.form({
-        title: "\"" + story.title + "\" went to the trash", accept: "Done",
-        intro: "Storyteller still keeps its world and its working copy, so the story can go on if you put the book back.",
-        fields: [{id: "world", type: "choice", label: "Its world", value: "keep", choices: choices}]
-    }).then(function (values) {
-        if (!values || values.world === "keep" || !Stories.exists(id))
-            return null;
-        return removeStory(id, {world: values.world === "all" ? "all" : "keep"});
-    });
+function writeInSharedWorld(scope, wish, skills, length, share) {
+    const chosen = pickSkills(skills || [], true).map(Skills.snapshot);
+    return Sharing.writeIn(scope, wish, chosen, lengthOf(length), share).then(function (made) { return opened(made); });
 }
 
 // Skills named in words or as a list, settled, or an Error that says which
@@ -510,7 +406,7 @@ function pickSkills(asked, orDefaults) {
 // Writes the next chapter now, whether or not the reader is near the end
 // of what there is; this is "unless the reader asks".
 function nextChapter(bookId) {
-    const mine = own(bookId, "continued"), state = Jobs.state(mine.story.id);
+    const mine = Stories.own(bookId, "continued"), state = Jobs.state(mine.story.id);
     if (state === "running" || state === "elsewhere")
         throw new Error("Chapter " + (mine.story.chapters.length + 1) + " is being written already.");
     if (state === "interrupted" || state === "failed")
@@ -522,21 +418,21 @@ function nextChapter(bookId) {
 
 // Records what the reader wants of the story; see Reading.steer.
 function steer(bookId, wish) {
-    const mine = own(bookId, "steered");
+    const mine = Stories.own(bookId, "steered");
     return Reading.steer(mine.book, mine.story, wish);
 }
 
 // Asks the author a question about the story so far. `spoilers` true (or
 // asking for them in the question) lets the answer draw on the plan.
 function askAuthor(bookId, question, spoilers) {
-    const mine = own(bookId, "asked about this way");
+    const mine = Stories.own(bookId, "asked about this way");
     return Reading.ask(mine.book, mine.story, question, spoilers);
 }
 
 // Branches a story: a new book with the chapters up to the one the reader
 // is in (or `chapter`, counted from 1), which goes its own way from there.
 function branch(bookId, difference, chapter) {
-    const mine = own(bookId, "branched");
+    const mine = Stories.own(bookId, "branched");
     const upTo = Math.max(1, Math.min(mine.story.chapters.length, Number(chapter) || Reading.place(mine.book.id).section + 1));
     return Writer.fork(mine.story, mine.book.id, upTo, difference).then(function (made) { return opened(made, upTo); });
 }
@@ -544,7 +440,7 @@ function branch(bookId, difference, chapter) {
 // Starts a new story in the world of one that has ended.
 // It is written with the skills of the first, unless `skills` names others.
 function sequel(bookId, wish, skills) {
-    const mine = own(bookId, "followed by a sequel");
+    const mine = Stories.own(bookId, "followed by a sequel");
     if (!mine.story.ended)
         throw new Error("\"" + mine.story.title + "\" has not ended yet; a sequel follows an ending. You can branch it instead.");
     const chosen = skills ? pickSkills(skills, false).map(Skills.snapshot) : [];
@@ -603,7 +499,7 @@ function evalGrade(text, statements) {
 
 // A story's skills, and when they were chosen or changed.
 function storySkills(bookId) {
-    const mine = own(bookId, "looked into");
+    const mine = Stories.own(bookId, "looked into");
     return {skills: Util.list(mine.story.skills).map(function (one) { return {id: one.id, name: one.name, kind: one.kind}; }),
             log: Util.list(mine.story.skillLog)};
 }
@@ -611,7 +507,7 @@ function storySkills(bookId) {
 // Sets the skills a story is written with from its next chapter on: a list
 // of names, or words. An empty list is none.
 function setSkills(bookId, ids, by) {
-    const mine = own(bookId, "changed"), chosen = pickSkills(ids, false), story = mine.story;
+    const mine = Stories.own(bookId, "changed"), chosen = pickSkills(ids, false), story = mine.story;
     story.skills = chosen.map(Skills.snapshot);
     story.skillLog = Util.list(story.skillLog).concat([{at: Util.now(), chapter: story.chapters.length + 1,
                                                         skills: chosen.map(function (one) { return one.id; }), by: by || "reader"}]);
@@ -668,7 +564,7 @@ function unfinished() {
 // One of a story's two graphs as lists: "seen" (what the reader knows; the
 // default) or "plan" (the author's, with every spoiler).
 function world(bookId, which) {
-    const mine = own(bookId, "looked into");
+    const mine = Stories.own(bookId, "looked into");
     return World.listing(which === "plan" ? mine.story.world.plan : mine.story.world.seen);
 }
 
@@ -703,7 +599,7 @@ function taste() { return Taste.profile(); }
 // Opens Omabook's own graph view on what the reader knows of a story's
 // world: the "seen" graph, never the plan.
 function showWorld(bookId) {
-    const mine = own(bookId, "looked into");
+    const mine = Stories.own(bookId, "looked into");
     omabook.ui.showGraph({scope: mine.story.world.seen});
     return mine.story.world.seen;
 }
@@ -719,11 +615,11 @@ function panel(action, bookId, text) {
         // The skills: `text` is a skill's name, or for "pasteSkill" its whole
         // SKILL.md, for "installSkill" a GitHub address.
         addSkill: function (book, id) {
-            const now = Util.list(own(book, "changed").story.skills).map(function (one) { return one.id; });
+            const now = Util.list(Stories.own(book, "changed").story.skills).map(function (one) { return one.id; });
             return setSkills(book, now.concat([id]), "panel");
         },
         removeSkill: function (book, id) {
-            const now = Util.list(own(book, "changed").story.skills).map(function (one) { return one.id; });
+            const now = Util.list(Stories.own(book, "changed").story.skills).map(function (one) { return one.id; });
             return setSkills(book, now.filter(function (other) { return other !== id; }), "panel");
         },
         pasteSkill: function (book, text) { return Skills.add(text); },

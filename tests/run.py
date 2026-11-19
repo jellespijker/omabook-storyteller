@@ -28,113 +28,16 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OMABOOK = os.environ.get("OMABOOK") or shutil.which("omabook")
-NAME = "storyteller"
-
-# A second, tiny plugin, only for the tests: it plays the other plugin that
-# tries to rewrite a book that isn't its own.
-SEED_PLUGIN = """
-function overwrite(id) {
-    omabook.files.write("data/fake.md", "# Mine now");
-    try { omabook.library.replaceFile(id, "data/fake.md"); return "replaced"; } catch (error) { return "refused: " + error.message; }
-}
-"""
-
-
-class Bench:
-    def __init__(self):
-        self.scratch = tempfile.mkdtemp(prefix="storyteller-test-")
-        self.home = os.path.join(self.scratch, "home")
-        self.config = os.path.join(self.home, ".config")
-        self.plugins = os.path.join(self.config, "omabook", "plugins")
-        self.plugin = os.path.join(self.plugins, NAME)
-        self.library = os.path.join(self.scratch, "library")
-        self.stub = os.path.join(self.scratch, "stub")
-        for folder in (self.plugins, self.library, self.stub, os.path.join(self.plugins, "seed")):
-            os.makedirs(folder)
-        self.env = dict(os.environ, HOME=self.home, XDG_CONFIG_HOME=self.config, XDG_CACHE_HOME=os.path.join(self.home, ".cache"),
-                        XDG_DATA_HOME=os.path.join(self.home, ".data"), STUB_DIR=self.stub, QT_QPA_PLATFORM="offscreen")
-        self.env.pop("ANTHROPIC_API_KEY", None)
-        with open(os.path.join(self.config, "omabook", "config.json"), "w") as file:
-            json.dump({"library": self.library, "ai_provider": "command",
-                       "ai_command": "%s %s" % (sys.executable, os.path.join(ROOT, "tests", "stub_ai.py")), "graph": "off"}, file)
-        # The plugin as it would be installed: everything but tests and data.
-        shutil.copytree(ROOT, self.plugin, ignore=shutil.ignore_patterns(".git", "data", "tests", ".scratch", "__pycache__"))
-        with open(os.path.join(self.plugins, "seed", "plugin.json"), "w") as file:
-            json.dump({"name": "Seed", "script": "main.js", "permissions": ["files"]}, file)
-        with open(os.path.join(self.plugins, "seed", "main.js"), "w") as file:
-            file.write(SEED_PLUGIN)
-
-    def omabook(self, *arguments, timeout=120, check=True):
-        done = subprocess.run([OMABOOK] + [str(argument) for argument in arguments] + ["--library", self.library],
-                              env=self.env, capture_output=True, text=True, timeout=timeout)
-        if check and done.returncode != 0:
-            raise AssertionError("omabook %s failed:\n%s\n%s" % (" ".join(map(str, arguments)), done.stdout, done.stderr))
-        return done
-
-    def run(self, what, *arguments, plugin=NAME, timeout=120):
-        """Runs a function or an event of the plugin; answers {result, said, log, error?}."""
-        done = self.omabook("plugin", "run", plugin, what, json.dumps(list(arguments)) if ":" not in what else json.dumps(arguments[0]),
-                            "--folder", self.plugins, "--json", timeout=timeout, check=False)
-        try:
-            return json.loads(done.stdout)
-        except ValueError:
-            raise AssertionError("plugin run %s printed no JSON:\n%s\n%s" % (what, done.stdout, done.stderr))
-
-    def ok(self, what, *arguments, **options):
-        answer = self.run(what, *arguments, **options)
-        if answer.get("error"):
-            raise AssertionError("%s failed: %s\n%s" % (what, answer["error"], "\n".join(answer.get("log", []))))
-        return answer["result"]
-
-    def json(self, *arguments):
-        return json.loads(self.omabook(*arguments, "--json").stdout)
-
-    # The stub model: how it should misbehave, and what it was asked.
-    def control(self, **how):
-        with open(os.path.join(self.stub, "control.json"), "w") as file:
-            json.dump(how, file)
-        for name in ("calls.jsonl", "state.json"):
-            if os.path.exists(os.path.join(self.stub, name)):
-                os.remove(os.path.join(self.stub, name))
-
-    def calls(self):
-        path = os.path.join(self.stub, "calls.jsonl")
-        if not os.path.exists(path):
-            return []
-        with open(path, encoding="utf-8") as file:
-            return [json.loads(line) for line in file]
-
-    def tasks(self):
-        return [call["task"] for call in self.calls()]
-
-    def story(self, story_id):
-        with open(os.path.join(self.plugin, "data", "stories", story_id + ".story"), encoding="utf-8") as file:
-            return json.load(file)
-
-    def scope(self, scope):
-        return self.json("graph", "show", "--scope", scope)
-
-    def turn(self, book, story, section, fraction, sections=None, timeout=120):
-        """The reader stops on a page: sets where the book was read to, and tells the plugin."""
-        self.omabook("progress", book, "--section", section, "--fraction", fraction)
-        return self.run("event:page.turned", {"id": book, "generated": NAME, "identifiers": {"generated": NAME, "storyteller": story},
-                                               "section": section, "sections": sections or len(self.story(story)["chapters"]),
-                                               "fraction": fraction, "percent": 0}, timeout=timeout)
+import sharing
+from bench import NAME, OMABOOK, ROOT, Bench, names
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *arguments):
         pass
-
-
-def names(view, kind=None):
-    return sorted(node["name"] for node in view["nodes"] if kind is None or node["kind"] == kind)
 
 
 def main():
@@ -663,17 +566,17 @@ def main():
         assert bench.tasks()[0] == "replan" and "What if the scale is honest?" in bench.calls()[0]["prompt"]
         step("a sequel and a branch start from the form too; a sequel to one that has not ended is refused before anything is asked")
 
-        # ------------------------------------------------- removing a story
-        def scopes():
-            return [entry["scope"] for entry in bench.json("graph", "scopes")["scopes"]]
+        # ---------------------------------- the world in a shared collection
+        sharing.check(bench, step, {"story": story_id, "book": book, "human": human, "seen": seen, "plan": plan})
 
+        # ------------------------------------------------- removing a story
         lone = bench.ok("removalPlan", alone["book"])
         assert lone["family"] == [] and lone["scopes"] == ["world:" + alone["story"], "world:" + alone["story"] + ":plan"]
         assert lone["files"] == ["data/stories/" + alone["story"] + ".story"], lone
         gone = bench.ok("removeStory", alone["book"])
         assert [one["story"] for one in gone["removed"]] == [alone["story"]] and gone["kept"] == []
         assert alone["book"] not in [entry["id"] for entry in bench.json("list")]
-        assert not [scope for scope in scopes() if alone["story"] in scope]
+        assert not [scope for scope in bench.scopes() if alone["story"] in scope]
         assert not os.path.exists(os.path.join(bench.plugin, "data", "stories", alone["story"] + ".story"))
         step("removing a story of its own takes its book (to the trash), both its graphs and its working copy")
 
@@ -682,7 +585,7 @@ def main():
         assert related[story_id] == "parent" and {fork_id, sequel_id, after["story"], other_way["story"]} <= set(related), related
         kept = bench.ok("removeStory", spun["book"], {"world": "keep"})
         assert [one["story"] for one in kept["removed"]] == [spun["story"]] and story_id in [one["story"] for one in kept["kept"]]
-        assert not [scope for scope in scopes() if spun["story"] in scope] and seen in scopes() and plan in scopes()
+        assert not [scope for scope in bench.scopes() if spun["story"] in scope] and seen in bench.scopes() and plan in bench.scopes()
         assert "Ilse Marrow" in [node["name"] for node in bench.ok("world", book)["nodes"]], "the others' world is whole"
         bench.control()
         assert bench.ok("nextChapter", sequel_book)["chapter"] >= 2, "and a story that shares it goes on"
@@ -694,7 +597,7 @@ def main():
         bench.omabook("remove", other_way["book"])
         heard = bench.run("event:book.removed", {"id": other_way["book"], "book": listed[other_way["book"]]})
         assert not heard.get("error") and os.path.exists(os.path.join(bench.plugin, "data", "stories", other_way["story"] + ".story"))
-        assert "world:" + other_way["story"] in scopes()
+        assert "world:" + other_way["story"] in bench.scopes()
         step("a story's book removed with Omabook's own Remove keeps its world unless the reader says otherwise")
 
         second = [one for one in bench.ok("stories") if one["lineage"] is None and one["story"] not in (story_id,)]
@@ -703,7 +606,7 @@ def main():
         went = {one["story"] for one in everything["removed"]}
         assert {story_id, sequel_id, fork_id, after["story"], other_way["story"]} == went, went
         for story in went:
-            assert not [scope for scope in scopes() if story in scope], story
+            assert not [scope for scope in bench.scopes() if story in scope], story
             assert not os.path.exists(os.path.join(bench.plugin, "data", "stories", story + ".story"))
         left = [entry["id"] for entry in bench.json("list")]
         assert human in left and book not in left and sequel_book not in left and fork_book not in left

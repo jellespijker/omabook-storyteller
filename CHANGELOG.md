@@ -18,6 +18,14 @@ moves those lines under its version.
   file-size and complexity budgets, secret scanning (Talisman) and an issue
   number in every commit message. It runs in the agents' edit hooks, on
   commit and in CI, and is left out of an installed plugin (#2).
+- A story's world goes with a collection you publish or share, with its
+  graph: only what you have been shown of it, never the plan, and each reader
+  sees only as far as they have read. The story itself goes as a file only
+  when you say so ("Storyteller: what goes when this story is shared"); a
+  book by a person never brings a world. In a shared space you write in,
+  "Storyteller: write in a world shared with you" starts a story of your own
+  in it, which goes into the space with its world. Needs Omabook 0.1.7; an
+  older one keeps worlds at home (#1).
 
 ## [1.2.1] - 2026-11-15
 
