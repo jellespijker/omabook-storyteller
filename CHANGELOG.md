@@ -10,6 +10,8 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [1.5] - 2026-11-20
+
 ### Added
 
 - A harness that checks every change the same way, whoever makes it: the
@@ -62,7 +64,8 @@ Needs Omabook 0.1.2. The first release.
 - A new story is in the library at once, with a page that says how far the
   writing has got.
 
-[Unreleased]: https://github.com/jellespijker/omabook-storyteller/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook-storyteller/compare/v1.5...HEAD
+[1.5]: https://github.com/jellespijker/omabook-storyteller/compare/v1.2.1...v1.5
 [1.2.1]: https://github.com/jellespijker/omabook-storyteller/compare/v1.2...v1.2.1
 [1.2]: https://github.com/jellespijker/omabook-storyteller/compare/v1.1...v1.2
 [1.1]: https://github.com/jellespijker/omabook-storyteller/releases/tag/v1.1
